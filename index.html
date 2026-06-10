@@ -744,7 +744,7 @@ function fmt1(v){ return v!=null?v.toFixed(1):'—'; }
 function fmtN(v){ return v!=null?Math.round(v).toLocaleString():'—'; }
 function daysClass(d){
   if(d==null) return 'val-muted';
-  if(d<90) return 'val-red';
+  if(d<60) return 'val-red';
   if(d<180) return 'val-amber';
   return 'val-green';
 }
@@ -862,11 +862,9 @@ function buildEmail(){
 
   const dayColor=(d)=>{
     if(d==null) return '#6b7a99';
-    if(d<90) return red; if(d<180) return amber; return green;
+    if(d<60) return red; if(d<180) return amber; return green;
   };
-  const dayBg=(d)=>{
-    if(d==null) return '#ffffff'; if(d<90) return redBg; if(d<180) return amberBg; return greenBg;
-  };
+  const dayBg=(d)=>{ return '#ffffff'; };
 
   const thStyle=`style="background:${navy};color:white;padding:8px 12px;text-align:left;font-size:13px;font-weight:600;border:none"`;
   const thRight=`style="background:${navy};color:white;padding:8px 12px;text-align:right;font-size:13px;font-weight:600;border:none"`;
@@ -899,7 +897,7 @@ function buildEmail(){
   h+=`</tbody></table>`;
 
   h+=`<p style="margin:0 0 20px">Following tables present the sufficiency of ME Cylinder oil ROB following <strong>3 credible scenarios</strong>:</p>`;
-  h+=`<p style="margin:0 0 8px;font-size:12px;color:#6b7a99"><span style="display:inline-block;width:12px;height:12px;background:${greenBg};border:1px solid ${green};border-radius:2px;margin-right:5px;vertical-align:-1px"></span>&gt;180 days &nbsp;&nbsp;<span style="display:inline-block;width:12px;height:12px;background:${amberBg};border:1px solid ${amber};border-radius:2px;margin-right:5px;vertical-align:-1px"></span>90–180 days &nbsp;&nbsp;<span style="display:inline-block;width:12px;height:12px;background:${redBg};border:1px solid ${red};border-radius:2px;margin-right:5px;vertical-align:-1px"></span>&lt;90 days</p>`;
+  h+=`<p style="margin:0 0 8px;font-size:12px;color:#6b7a99"><span style="color:${green};font-weight:600">●</span> &gt;180 days &nbsp;&nbsp;<span style="color:${amber};font-weight:600">●</span> 60–180 days &nbsp;&nbsp;<span style="color:${red};font-weight:600">●</span> &lt;60 days</p>`;
 
   // Scenario table builder
   const scenTable=(title,note,rows)=>{
@@ -911,7 +909,7 @@ function buildEmail(){
     rows.forEach(([v,days,mths],i)=>{
       const bg=i%2===0?'#ffffff':grayBg;
       const hasData=days!=null;
-      s+=`<tr style="background:${hasData?dayBg(days):bg}">`;
+      s+=`<tr style="background:${bg}">`;
       s+=`<td ${tdStyle}><strong>Minerva ${v}</strong></td>`;
       s+=`<td style="padding:7px 12px;font-size:13px;border-bottom:1px solid #e8edf5;text-align:right;font-weight:600;color:${dayColor(days)}">${hasData?Math.round(days):'No Data'}</td>`;
       s+=`<td style="padding:7px 12px;font-size:13px;border-bottom:1px solid #e8edf5;text-align:right;font-weight:600;color:${dayColor(days)}">${hasData?fmt1(mths):'No Data'}</td>`;
@@ -945,14 +943,6 @@ function buildEmail(){
     h+=`</tbody></table>`;
   }
 
-  // Signature
-  h+=`<p style="margin:24px 0 4px">Thank you,<br>Best Regards</p>`;
-  h+=`<p style="margin:0;font-weight:600;color:${navy}">Nikos Sofianos</p>`;
-  h+=`<p style="margin:0;font-size:13px;color:#6b7a99">Asst. Technical Superintendent | TE Department</p>`;
-  h+=`<p style="margin:0;font-size:13px;color:#6b7a99">T: +30 210 8907353 &nbsp;|&nbsp; M: +30 693 2450244</p>`;
-  h+=`<p style="margin:0;font-size:13px"><a href="mailto:n.sofianos@minervagas.com" style="color:${navy}">n.sofianos@minervagas.com</a></p>`;
-  h+=`<p style="margin:0;font-size:13px;color:#6b7a99">141-143 Vouliagmenis Ave. 166 73, Voula, Athens</p>`;
-  h+=`<p style="margin:0;font-size:13px"><a href="http://www.minervagas.com" style="color:${navy}">www.minervagas.com</a></p>`;
   h+=`</div>`;
 
   document.getElementById('emailBox').innerHTML=h;
@@ -1003,11 +993,11 @@ function applyExcelStyles(ws, dataRows, daysColIdx){
         // Color-code days column
         if(daysColIdx!=null && C===daysColIdx && typeof ws[addr].v==='number'){
           const d=ws[addr].v;
-          let fg,bg;
-          if(d<90){fg=red;bg=redBg;}
-          else if(d<180){fg=amber;bg=amberBg;}
-          else{fg=green;bg=greenBg;}
-          ws[addr].s={...ws[addr].s,font:{bold:true,color:{rgb:fg}},fill:{fgColor:{rgb:bg}}};
+          let fg;
+          if(d<60) fg=red;
+          else if(d<180) fg=amber;
+          else fg=green;
+          ws[addr].s={...ws[addr].s,font:{bold:true,color:{rgb:fg}}};
         }
       }
     }
