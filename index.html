@@ -279,7 +279,7 @@
         <div class="msg" id="parseMsg"></div>
       </div>
       <div class="btn-row right">
-        <button class="btn btn-primary" id="btn1" disabled onclick="goPage(2)">Next: Feed rate & BN →</button>
+        <button class="btn btn-primary" id="btn1" disabled onclick="navigateTo(2)">Next: Feed rate & BN →</button>
       </div>
     </div>
 
@@ -297,7 +297,7 @@
         </table>
       </div>
       <div class="btn-row space">
-        <button class="btn" onclick="goPage(1)">← Back</button>
+        <button class="btn" onclick="navigateTo(1)">← Back</button>
         <button class="btn btn-primary" onclick="runCalc()">Calculate →</button>
       </div>
     </div>
@@ -383,8 +383,8 @@
       </div>
 
       <div class="btn-row space">
-        <button class="btn" onclick="goPage(2)">← Back</button>
-        <button class="btn btn-primary" onclick="goPage(4)">Generate outputs →</button>
+        <button class="btn" onclick="navigateTo(2)">← Back</button>
+        <button class="btn btn-primary" onclick="navigateTo(4)">Generate outputs →</button>
       </div>
     </div>
 
@@ -406,7 +406,7 @@
         <button class="btn btn-green" onclick="exportExcel()">⬇ Download Excel</button>
       </div>
       <div class="btn-row space">
-        <button class="btn" onclick="goPage(3)">← Back to results</button>
+        <button class="btn" onclick="navigateTo(3)">← Back to results</button>
         <button class="btn btn-accent" onclick="startOver()">↺ New month</button>
       </div>
     </div>
@@ -491,16 +491,32 @@ function detectVessel(name){
   return null;
 }
 function findLatestMonthCol(ws){
-  let lastMonthIdx=-1, lastCol=-1;
+  // Find all month header columns first
+  const monthCols=[];
   for(let c=1;c<=48;c++){
     const cell=ws[XLSX.utils.encode_cell({r:0,c})];
     if(!cell) continue;
     const v=(cell.v||'').toString().trim().toUpperCase();
     const mi=MONTHS.indexOf(v);
-    if(mi>-1){ lastMonthIdx=mi; lastCol=c; }
+    if(mi>-1) monthCols.push({monthIdx:mi, monthName:MONTHS[mi], col:c});
   }
-  if(lastMonthIdx===-1) return null;
-  return { monthIdx:lastMonthIdx, monthName:MONTHS[lastMonthIdx], robCol:lastCol+1, conCol:lastCol+2 };
+  if(!monthCols.length) return null;
+  // Find the last month that has actual ROB data (check rows 4-20, robCol = col+1)
+  // Work backwards through month columns
+  for(let i=monthCols.length-1;i>=0;i--){
+    const {monthIdx,monthName,col}=monthCols[i];
+    const robCol=col+1;
+    // Check if any of the key ROB rows (rows 11-19) have data in this rob column
+    let hasData=false;
+    for(let r=10;r<=19;r++){
+      const cell=ws[XLSX.utils.encode_cell({r,c:robCol-1})];
+      if(cell && cell.v && cell.v>0){ hasData=true; break; }
+    }
+    if(hasData) return {monthIdx, monthName, robCol, conCol:col+2};
+  }
+  // Fallback: return first month with a header
+  const first=monthCols[0];
+  return {monthIdx:first.monthIdx, monthName:first.monthName, robCol:first.col+1, conCol:first.col+2};
 }
 function getCell(ws,r,c){ const a=XLSX.utils.encode_cell({r,c}); return ws[a]?ws[a].v:null; }
 function extractData(wb, vessel){
@@ -655,7 +671,7 @@ function runCalc(){
 
   renderResults(history);
   document.getElementById('topMonth').textContent=cap(currentMonth)+' 2026';
-  goPage(3);
+  navigateTo(3);
 }
 
 // ── RENDER ────────────────────────────────────────────────────────────────────
@@ -906,15 +922,12 @@ function startOver(){
   document.getElementById('fileInput').value='';
   document.getElementById('btn1').disabled=true;
   document.getElementById('topMonth').textContent='';
-  goPage(1);
+  navigateTo(1);
 }
-
-// Init page 2 table when first navigating to it
-const origGoPage=goPage;
-function goPage(n){
+function navigateTo(n){
   if(n===2) buildFRTable();
   if(n===4) buildEmail();
-  origGoPage(n);
+  goPage(n);
 }
 </script>
 </body>
