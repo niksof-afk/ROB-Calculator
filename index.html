@@ -492,6 +492,8 @@ function detectVessel(name){
 }
 function findLatestMonthCol(ws){
   // Find all month header columns first
+  // Structure: APRIL header is in col N, ROB END OF APR is also col N (row 2 label),
+  // CONSUMED WITHIN APR is col N+1
   const monthCols=[];
   for(let c=1;c<=48;c++){
     const cell=ws[XLSX.utils.encode_cell({r:0,c})];
@@ -501,22 +503,21 @@ function findLatestMonthCol(ws){
     if(mi>-1) monthCols.push({monthIdx:mi, monthName:MONTHS[mi], col:c});
   }
   if(!monthCols.length) return null;
-  // Find the last month that has actual ROB data (check rows 4-20, robCol = col+1)
-  // Work backwards through month columns
+  // Work backwards — find last month with actual ROB data in that column
   for(let i=monthCols.length-1;i>=0;i--){
     const {monthIdx,monthName,col}=monthCols[i];
-    const robCol=col+1;
-    // Check if any of the key ROB rows (rows 11-19) have data in this rob column
+    const robCol=col; // ROB is at same column as header
+    const conCol=col+1; // CONSUMED is header+1
     let hasData=false;
     for(let r=10;r<=19;r++){
       const cell=ws[XLSX.utils.encode_cell({r,c:robCol-1})];
       if(cell && cell.v && cell.v>0){ hasData=true; break; }
     }
-    if(hasData) return {monthIdx, monthName, robCol, conCol:col+2};
+    if(hasData) return {monthIdx, monthName, robCol, conCol};
   }
-  // Fallback: return first month with a header
+  // Fallback
   const first=monthCols[0];
-  return {monthIdx:first.monthIdx, monthName:first.monthName, robCol:first.col+1, conCol:first.col+2};
+  return {monthIdx:first.monthIdx, monthName:first.monthName, robCol:first.col, conCol:first.col+1};
 }
 function getCell(ws,r,c){ const a=XLSX.utils.encode_cell({r,c}); return ws[a]?ws[a].v:null; }
 function extractData(wb, vessel){
@@ -603,10 +604,27 @@ function buildFRTable(){
   });
 }
 
+// ── PRELOADED HISTORY (Dec 2024 – Apr 2026) ───────────────────────────────────
+const PRELOADED_HISTORY = {"Psara":{"DEC2024":3768,"JAN2025":5734,"FEB2025":1771,"MAR2025":5019,"APR2025":4481,"MAY2025":4589,"JUN2025":4944,"JUL2025":4296,"AUG2025":4898,"SEP2025":4547,"OCT2025":4606,"NOV2025":2797,"DEC2025":2254,"JAN2026":6501,"FEB2026":3353,"MAR2026":3225,"APR2026":4638},"Limnos":{"DEC2024":5577,"JAN2025":6460,"FEB2025":7000,"MAR2025":7600,"APR2025":6130,"MAY2025":4822,"JUN2025":3662,"JUL2025":7186,"AUG2025":6510,"SEP2025":6952,"OCT2025":5808,"NOV2025":10512,"DEC2025":6136,"JAN2026":6225,"FEB2026":3426,"MAR2026":4161,"APR2026":7971},"Kalymnos":{"DEC2024":6500,"JAN2025":10730,"FEB2025":7970,"MAR2025":8250,"APR2025":6500,"MAY2025":10500,"JUN2025":9760,"JUL2025":12740,"AUG2025":14750,"SEP2025":7700,"OCT2025":3700,"NOV2025":8500,"DEC2025":9100,"JAN2026":5800,"FEB2026":8242,"MAR2026":8242,"APR2026":9300},"Chios":{"DEC2024":12900,"JAN2025":12300,"FEB2025":4263,"MAR2025":10111,"APR2025":12604,"MAY2025":11904,"JUN2025":11696,"JUL2025":8400,"AUG2025":6000,"SEP2025":10200,"OCT2025":11600,"NOV2025":9400,"DEC2025":13800,"JAN2026":11300,"FEB2026":3200,"MAR2026":4600,"APR2026":11927},"Amorgos":{"DEC2024":9960,"JAN2025":11270,"FEB2025":10074,"MAR2025":11315,"APR2025":10550,"MAY2025":6010,"JUN2025":3020,"JUL2025":12120,"AUG2025":10600,"SEP2025":10000,"OCT2025":14500,"NOV2025":15490,"DEC2025":13810,"JAN2026":11300,"FEB2026":4900,"MAR2026":6200,"APR2026":8000},"Eleonora":{"MAR2026":8360,"APR2026":10540},"Roxanne":{}};
+
 // ── HISTORY ───────────────────────────────────────────────────────────────────
-function loadHistory(){ try{ return JSON.parse(localStorage.getItem('mg_cylhist')||'{}'); }catch(e){return{};} }
+function loadHistory(){
+  try{
+    const stored=localStorage.getItem('mg_cylhist');
+    if(!stored){
+      // First run — seed with preloaded history
+      localStorage.setItem('mg_cylhist',JSON.stringify(PRELOADED_HISTORY));
+      return JSON.parse(JSON.stringify(PRELOADED_HISTORY));
+    }
+    return JSON.parse(stored);
+  }catch(e){ return JSON.parse(JSON.stringify(PRELOADED_HISTORY)); }
+}
 function saveHistory(h){ localStorage.setItem('mg_cylhist',JSON.stringify(h)); }
-function clearHistory(){ if(!confirm('Delete all stored consumption history?')) return; localStorage.removeItem('mg_cylhist'); renderHistory(); }
+function clearHistory(){
+  if(!confirm('Delete all stored consumption history? This will also remove the pre-loaded historical data.')) return;
+  localStorage.removeItem('mg_cylhist');
+  renderHistory();
+}
 function exportHistory(){
   const h=loadHistory();
   const blob=new Blob([JSON.stringify(h,null,2)],{type:'application/json'});
@@ -624,15 +642,31 @@ function importHistory(input){
   };
   r.readAsText(file);
 }
+// Build a year-aware key from month name + current year context
+function makeHistKey(monthName, yearHint){
+  // monthName is e.g. 'APRIL', yearHint is e.g. 2026
+  const abbr={JANUARY:'JAN',FEBRUARY:'FEB',MARCH:'MAR',APRIL:'APR',MAY:'MAY',JUNE:'JUN',JULY:'JUL',AUGUST:'AUG',SEPTEMBER:'SEP',OCTOBER:'OCT',NOVEMBER:'NOV',DECEMBER:'DEC'};
+  return (abbr[monthName]||monthName.substring(0,3))+yearHint;
+}
+// Get last N months of values sorted chronologically
+function getLastNMonthValues(hist, n){
+  const entries=Object.entries(hist).filter(([k,v])=>v>0);
+  // Sort by key (e.g. APR2026) — year suffix sorts correctly
+  entries.sort((a,b)=>a[0].localeCompare(b[0]));
+  return entries.slice(-n).map(e=>e[1]);
+}
 
 // ── CALCULATE ────────────────────────────────────────────────────────────────
 function runCalc(){
   const history=loadHistory();
-  // Store new consumption entries
+  // Determine year from current month — assume current year is 2026
+  const yearHint=2026;
+  // Store new consumption entries with year-aware key
   VESSELS.forEach(v=>{
     const d=parsedData[v]; if(!d||d.cylConsumed<=0) return;
     if(!history[v]) history[v]={};
-    history[v][d.monthName]=d.cylConsumed;
+    const key=makeHistKey(d.monthName, yearHint);
+    history[v][key]=d.cylConsumed;
   });
   saveHistory(history);
 
@@ -657,9 +691,9 @@ function runCalc(){
     const s3daily = s3mon/30;
     const s3days = rob>0 ? rob/s3daily : null;
 
-    // Scenario 1
+    // Scenario 1 — last 12 months average
     const hist=history[v]||{};
-    const vals=Object.values(hist).filter(x=>x>0);
+    const vals=getLastNMonthValues(hist,12);
     let s1avg=null, s1days=null;
     if(vals.length>=2){
       s1avg = vals.reduce((a,b)=>a+b,0)/vals.length/30;
@@ -764,17 +798,22 @@ function renderResults(history){
 
 function renderHistory(history){
   if(!history) history=loadHistory();
+  // Collect all unique keys across all vessels, sorted
+  const allKeys=new Set();
+  VESSELS.forEach(v=>{ Object.keys(history[v]||{}).forEach(k=>allKeys.add(k)); });
+  const sortedKeys=Array.from(allKeys).sort((a,b)=>a.localeCompare(b));
+
   let html='<thead><tr><th>Vessel</th>';
-  MONTHS.forEach(m=>html+=`<th>${m.substring(0,3)}</th>`);
-  html+='<th>Avg/day (Lt)</th></tr></thead><tbody>';
+  sortedKeys.forEach(k=>html+=`<th style="font-size:11px;text-align:right">${k}</th>`);
+  html+='<th style="text-align:right">Avg/day (Lt)<br><span style="font-weight:400;color:var(--text-muted)">last 12</span></th></tr></thead><tbody>';
   VESSELS.forEach(v=>{
     const hist=history[v]||{};
     html+=`<tr><td>Minerva ${v}</td>`;
-    MONTHS.forEach(m=>{
-      const val=hist[m];
+    sortedKeys.forEach(k=>{
+      const val=hist[k];
       html+=val>0?`<td class="hist-val">${val.toLocaleString()}</td>`:`<td class="hist-empty">—</td>`;
     });
-    const vals=Object.values(hist).filter(x=>x>0);
+    const vals=getLastNMonthValues(hist,12);
     const avg=vals.length>0?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length/30):null;
     html+=`<td class="hist-avg">${avg!=null?avg:'—'}</td></tr>`;
   });
