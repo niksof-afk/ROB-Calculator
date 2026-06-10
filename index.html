@@ -997,68 +997,155 @@ function renderCharts(){
   });
 }
 
+// ── CHART TO PNG (Outlook-safe) ───────────────────────────────────────────────
+function buildROBChartPNG(vessel, robHist, width, height){
+  return new Promise(resolve=>{
+    const vData=robHist[vessel];
+    if(!vData){ resolve(null); return; }
+    const cylEntries=getLastNROB(vData.cyl||{},12);
+    const sysEntries=getLastNROB(vData.sys||{},12);
+    const auxEntries=getLastNROB(vData.aux||{},12);
+    const longest=[cylEntries,sysEntries,auxEntries].reduce((a,b)=>a.length>=b.length?a:b);
+    if(longest.length<2){ resolve(null); return; }
+    const labels=longest.map(e=>e[0]);
+    const mapVals=(entries)=>{const m={};entries.forEach(([k,v])=>m[k]=v);return labels.map(l=>m[l]||null);};
+    const cylVals=mapVals(cylEntries), sysVals=mapVals(sysEntries), auxVals=mapVals(auxEntries);
+
+    const canvas=document.createElement('canvas');
+    canvas.width=width; canvas.height=height;
+    const ctx=canvas.getContext('2d');
+    const pad={l:55,r:15,t:30,b:50};
+    const W=width-pad.l-pad.r, H=height-pad.t-pad.b;
+    const allVals=[...cylVals,...sysVals,...auxVals].filter(v=>v!=null);
+    const maxV=Math.max(...allVals)*1.1||1;
+
+    // Background
+    ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,width,height);
+
+    // Title
+    ctx.fillStyle='#0a1628'; ctx.font='bold 12px Arial';
+    ctx.fillText(`Minerva ${vessel} — ROB Trend (Lt)`,pad.l,18);
+
+    // Grid
+    const steps=4;
+    ctx.strokeStyle='#e8edf5'; ctx.lineWidth=1;
+    ctx.fillStyle='#9aa5b8'; ctx.font='10px Arial'; ctx.textAlign='right';
+    for(let i=0;i<=steps;i++){
+      const v=maxV*i/steps;
+      const y=pad.t+H-H*i/steps;
+      ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(pad.l+W,y); ctx.stroke();
+      const label=v>=1000?(v/1000).toFixed(0)+'k':Math.round(v);
+      ctx.fillText(label,pad.l-4,y+4);
+    }
+
+    // X labels
+    ctx.textAlign='center'; ctx.fillStyle='#9aa5b8'; ctx.font='9px Arial';
+    labels.forEach((l,i)=>{
+      if(labels.length>8 && i%2!==0) return;
+      const x=pad.l+W*i/(labels.length-1);
+      const short=l.replace('2025','\'25').replace('2026','\'26');
+      ctx.fillText(short,x,pad.t+H+14);
+    });
+
+    // Axes
+    ctx.strokeStyle='#dde2ec'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad.l,pad.t); ctx.lineTo(pad.l,pad.t+H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad.l,pad.t+H); ctx.lineTo(pad.l+W,pad.t+H); ctx.stroke();
+
+    // Draw line
+    const drawLine=(vals,color)=>{
+      ctx.strokeStyle=color; ctx.lineWidth=2; ctx.lineJoin='round';
+      ctx.beginPath(); let started=false;
+      vals.forEach((v,i)=>{
+        if(v==null) return;
+        const x=pad.l+W*i/(labels.length-1);
+        const y=pad.t+H-H*v/maxV;
+        if(!started){ctx.moveTo(x,y);started=true;}else ctx.lineTo(x,y);
+      });
+      ctx.stroke();
+      // Dots
+      ctx.fillStyle=color;
+      vals.forEach((v,i)=>{
+        if(v==null) return;
+        const x=pad.l+W*i/(labels.length-1);
+        const y=pad.t+H-H*v/maxV;
+        ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
+      });
+    };
+    drawLine(sysVals,'#1a56db');
+    drawLine(cylVals,'#1a9e6a');
+    drawLine(auxVals,'#c8a84b');
+
+    // Legend
+    const ly=pad.t+H+28;
+    const legend=[['#1a56db','System oil'],['#1a9e6a','Cylinder oil'],['#c8a84b','Aux. engines']];
+    let lx=pad.l;
+    legend.forEach(([color,label])=>{
+      ctx.fillStyle=color; ctx.fillRect(lx,ly,10,10);
+      ctx.fillStyle='#555'; ctx.font='10px Arial'; ctx.textAlign='left';
+      ctx.fillText(label,lx+13,ly+9);
+      lx+=label.length*6+24;
+    });
+
+    resolve(canvas.toDataURL('image/png'));
+  });
+}
+
 // ── EMAIL ─────────────────────────────────────────────────────────────────────
-function buildEmail(){
+async function buildEmail(){
   const r=calcRes;
   const month=cap(currentMonth)||'[Month]';
   const year=new Date().getFullYear();
+  const robHist=loadROBHistory();
 
-  const navy='#0a1628'; const gold='#c8a84b'; const green='#1a9e6a'; const amber='#b07d12'; const red='#c0392b';
-  const greenBg='#e6f7f1'; const amberBg='#fdf3dc'; const redBg='#fdecea'; const grayBg='#f5f7fa';
+  const navy='#0a1628'; const green='#1a9e6a'; const red='#c0392b'; const grayBg='#f5f7fa';
+  const dayColor=(d)=>{ if(d==null) return '#6b7a99'; if(d<60) return red; return green; };
 
-  const dayColor=(d)=>{
-    if(d==null) return '#6b7a99';
-    if(d<60) return red; return green;
-  };
-  const dayBg=(d)=>{ return '#ffffff'; };
+  // Table styles — max 400px wide
+  const tW=`style="border-collapse:collapse;width:400px;margin-bottom:20px;font-family:Arial,sans-serif"`;
+  const thL=`style="background:${navy};color:white;padding:7px 12px;text-align:left;font-size:13px;font-weight:600;border:none"`;
+  const thR=`style="background:${navy};color:white;padding:7px 12px;text-align:right;font-size:13px;font-weight:600;border:none"`;
+  const tdL=`style="padding:6px 12px;font-size:13px;border-bottom:1px solid #e8edf5;color:#1a2540"`;
+  const tdR=`style="padding:6px 12px;font-size:13px;border-bottom:1px solid #e8edf5;text-align:right;color:#1a2540"`;
+  const hdr=(t)=>`<p style="margin:16px 0 6px;font-weight:600;color:${navy};font-size:12px;text-transform:uppercase;letter-spacing:.5px">${t}</p>`;
 
-  const thStyle=`style="background:${navy};color:white;padding:8px 12px;text-align:left;font-size:13px;font-weight:600;border:none"`;
-  const thRight=`style="background:${navy};color:white;padding:8px 12px;text-align:right;font-size:13px;font-weight:600;border:none"`;
-  const tdStyle=`style="padding:7px 12px;font-size:13px;border-bottom:1px solid #e8edf5;color:#1a2540"`;
-  const tdRight=`style="padding:7px 12px;font-size:13px;border-bottom:1px solid #e8edf5;text-align:right;color:#1a2540"`;
-  const tableStyle=`style="border-collapse:collapse;width:100%;margin-bottom:20px;font-family:Arial,sans-serif"`;
-
-  let h=`<div style="font-family:Arial,sans-serif;font-size:14px;color:#1a2540;max-width:720px">`;
-
-  // Greeting
+  let h=`<div style="font-family:Arial,sans-serif;font-size:14px;color:#1a2540">`;
   h+=`<p style="margin:0 0 12px">Dear All, good day,</p>`;
   h+=`<p style="margin:0 0 12px">Please find attached Lub oil Inventory form <strong>V-E-30</strong> for <strong>${month} ${year}</strong>.</p>`;
-  h+=`<p style="margin:0 0 20px">Vessels are in line with the following feed rate &amp; BN settings:</p>`;
+  h+=`<p style="margin:0 0 16px">Vessels are in line with the following feed rate &amp; BN settings:</p>`;
 
-  // Feed rate table
-  h+=`<p style="margin:0 0 8px;font-weight:600;color:${navy};font-size:13px;text-transform:uppercase;letter-spacing:.5px">Feed Rate &amp; BN Settings</p>`;
-  h+=`<table ${tableStyle}><thead><tr>`;
-  h+=`<th ${thStyle}>Vessel</th><th ${thRight}>Feed Rate (g/kWh)</th><th ${thRight}>BN</th><th ${thRight}>Engine</th><th ${thRight}>NCR (kW)</th>`;
+  // Feed rate table — Vessel, Feed Rate, BN only
+  h+=hdr('Feed Rate &amp; BN Settings');
+  h+=`<table ${tW}><thead><tr>`;
+  h+=`<th ${thL}>Vessel</th><th ${thR}>Feed Rate (g/kWh)</th><th ${thR}>BN</th>`;
   h+=`</tr></thead><tbody>`;
   VESSELS.forEach((v,i)=>{
     const bg=i%2===0?'#ffffff':grayBg;
     h+=`<tr style="background:${bg}">`;
-    h+=`<td ${tdStyle}><strong>Minerva ${v}</strong></td>`;
-    h+=`<td ${tdRight}>${r[v].fr}</td>`;
-    h+=`<td ${tdRight}>${r[v].bn}</td>`;
-    h+=`<td ${tdRight} style="padding:7px 12px;font-size:12px;border-bottom:1px solid #e8edf5;text-align:right"><span style="background:${r[v].eng==='DSME'?'#e8f0fe':'#fdf3dc'};color:${r[v].eng==='DSME'?'#1a56db':'#92610a'};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${r[v].eng.replace('2','')}</span></td>`;
-    h+=`<td ${tdRight}>${r[v].ncr.toLocaleString()}</td>`;
+    h+=`<td ${tdL}><strong>Minerva ${v}</strong></td>`;
+    h+=`<td ${tdR}>${r[v].fr}</td>`;
+    h+=`<td ${tdR}>${r[v].bn}</td>`;
     h+=`</tr>`;
   });
   h+=`</tbody></table>`;
 
-  h+=`<p style="margin:0 0 20px">Following tables present the sufficiency of ME Cylinder oil ROB following <strong>3 credible scenarios</strong>:</p>`;
-  h+=`<p style="margin:0 0 8px;font-size:12px;color:#6b7a99"><span style="color:${green};font-weight:600">●</span> &gt;60 days &nbsp;&nbsp;<span style="color:${red};font-weight:600">●</span> &lt;60 days</p>`;
+  h+=`<p style="margin:0 0 8px">Following tables present the sufficiency of ME Cylinder oil ROB following <strong>3 credible scenarios</strong>:</p>`;
+  h+=`<p style="margin:0 0 12px;font-size:12px;color:#6b7a99"><span style="color:${green};font-weight:600">●</span> &gt;60 days &nbsp;&nbsp;<span style="color:${red};font-weight:600">●</span> &lt;60 days</p>`;
 
   // Scenario table builder
   const scenTable=(title,note,rows)=>{
-    let s=`<p style="margin:20px 0 8px;font-weight:600;color:${navy};font-size:13px;text-transform:uppercase;letter-spacing:.5px">${title}</p>`;
-    if(note) s+=`<p style="margin:0 0 8px;font-size:12px;color:#6b7a99">${note}</p>`;
-    s+=`<table ${tableStyle}><thead><tr>`;
-    s+=`<th ${thStyle}>Vessel</th><th ${thRight}>Operating Days</th><th ${thRight}>Operating Months</th>`;
+    let s=hdr(title);
+    if(note) s+=`<p style="margin:0 0 6px;font-size:12px;color:#6b7a99">${note}</p>`;
+    s+=`<table ${tW}><thead><tr>`;
+    s+=`<th ${thL}>Vessel</th><th ${thR}>Operating Days</th><th ${thR}>Operating Months</th>`;
     s+=`</tr></thead><tbody>`;
     rows.forEach(([v,days,mths],i)=>{
       const bg=i%2===0?'#ffffff':grayBg;
       const hasData=days!=null;
       s+=`<tr style="background:${bg}">`;
-      s+=`<td ${tdStyle}><strong>Minerva ${v}</strong></td>`;
-      s+=`<td style="padding:7px 12px;font-size:13px;border-bottom:1px solid #e8edf5;text-align:right;font-weight:600;color:${dayColor(days)}">${hasData?Math.round(days):'No Data'}</td>`;
-      s+=`<td style="padding:7px 12px;font-size:13px;border-bottom:1px solid #e8edf5;text-align:right;font-weight:600;color:${dayColor(days)}">${hasData?fmt1(mths):'No Data'}</td>`;
+      s+=`<td ${tdL}><strong>Minerva ${v}</strong></td>`;
+      s+=`<td style="padding:6px 12px;font-size:13px;border-bottom:1px solid #e8edf5;text-align:right;font-weight:600;color:${dayColor(days)}">${hasData?Math.round(days):'No Data'}</td>`;
+      s+=`<td style="padding:6px 12px;font-size:13px;border-bottom:1px solid #e8edf5;text-align:right;font-weight:600;color:${dayColor(days)}">${hasData?fmt1(mths):'No Data'}</td>`;
       s+=`</tr>`;
     });
     s+=`</tbody></table>`;
@@ -1067,38 +1154,36 @@ function buildEmail(){
 
   h+=scenTable('Scenario 1 — Actual (12-month average consumption)',
     'Based on average daily consumption from the past 12 months operating profile.',
-    VESSELS.map(v=>[v, r[v].s1days, r[v].s1days!=null?r[v].s1days/30:null]));
-
+    VESSELS.map(v=>[v,r[v].s1days,r[v].s1days!=null?r[v].s1days/30:null]));
   h+=scenTable('Scenario 2 — Continuous operation at NCR with current feed rate',null,
-    VESSELS.map(v=>[v, r[v].s2days, r[v].s2days!=null?r[v].s2days/30:null]));
-
+    VESSELS.map(v=>[v,r[v].s2days,r[v].s2days!=null?r[v].s2days/30:null]));
   h+=scenTable('Scenario 3 — Fixed monthly assumption',
-    `DSME: 6,000 Lt/month &nbsp;|&nbsp; SHI: 9,000 Lt/month`,
-    VESSELS.map(v=>[v, r[v].s3days, r[v].s3days!=null?r[v].s3days/30:null]));
+    'DSME: 6,000 Lt/month &nbsp;|&nbsp; SHI: 9,000 Lt/month',
+    VESSELS.map(v=>[v,r[v].s3days,r[v].s3days!=null?r[v].s3days/30:null]));
 
-  // Safety stock note
+  // Safety stock
   const ssVessels=VESSELS.filter(v=>r[v].ss>0);
   if(ssVessels.length>0){
-    h+=`<p style="margin:16px 0 8px;font-size:13px;color:#6b7a99"><em>Note: Safety stock is excluded from all calculations above.</em></p>`;
-    h+=`<table ${tableStyle} style="border-collapse:collapse;width:auto;margin-bottom:20px;font-family:Arial,sans-serif"><thead><tr>`;
-    h+=`<th ${thStyle}>Vessel</th><th ${thRight}>Safety Stock (Lt)</th></tr></thead><tbody>`;
+    h+=`<p style="margin:8px 0 6px;font-size:13px;color:#6b7a99"><em>Note: Safety stock is excluded from all calculations above.</em></p>`;
+    h+=`<table ${tW} style="border-collapse:collapse;width:260px;margin-bottom:20px;font-family:Arial,sans-serif"><thead><tr>`;
+    h+=`<th ${thL}>Vessel</th><th ${thR}>Safety Stock (Lt)</th></tr></thead><tbody>`;
     VESSELS.forEach((v,i)=>{
       const bg=i%2===0?'#ffffff':grayBg;
-      h+=`<tr style="background:${bg}"><td ${tdStyle}>Minerva ${v}</td><td ${tdRight}>${r[v].ss>0?r[v].ss.toLocaleString():'—'}</td></tr>`;
+      h+=`<tr style="background:${bg}"><td ${tdL}>Minerva ${v}</td><td ${tdR}>${r[v].ss>0?r[v].ss.toLocaleString():'—'}</td></tr>`;
     });
     h+=`</tbody></table>`;
   }
 
-  // Charts section
-  const robHist=loadROBHistory();
-  h+=`<p style="margin:24px 0 8px;font-weight:600;color:${navy};font-size:13px;text-transform:uppercase;letter-spacing:.5px">ROB Trends — Past 12 Months</p>`;
-  h+=`<table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif"><tbody>`;
+  // Charts — render to canvas PNG for Outlook compatibility
+  h+=hdr('ROB Trends — Past 12 Months');
+  h+=`<table style="border-collapse:collapse;font-family:Arial,sans-serif"><tbody>`;
+  const pngPromises=VESSELS.map(v=>buildROBChartPNG(v,robHist,360,200));
+  const pngs=await Promise.all(pngPromises);
   let col=0;
-  VESSELS.forEach(v=>{
-    const svg=buildROBChartSVG(v, robHist, 340, 200);
-    if(!svg) return;
+  pngs.forEach((png,i)=>{
+    if(!png) return;
     if(col%2===0) h+=`<tr>`;
-    h+=`<td style="padding:6px;vertical-align:top">${svg}</td>`;
+    h+=`<td style="padding:6px;vertical-align:top"><img src="${png}" width="360" height="200" style="display:block"></td>`;
     col++;
     if(col%2===0) h+=`</tr>`;
   });
@@ -1108,7 +1193,6 @@ function buildEmail(){
   h+=`</div>`;
 
   document.getElementById('emailBox').innerHTML=h;
-  // Store HTML for clipboard
   document.getElementById('emailBox').dataset.html=h;
 }
 
@@ -1258,9 +1342,9 @@ function startOver(){
   document.getElementById('topMonth').textContent='';
   navigateTo(1);
 }
-function navigateTo(n){
+async function navigateTo(n){
   if(n===2) buildFRTable();
-  if(n===4) buildEmail();
+  if(n===4) await buildEmail();
   goPage(n);
 }
 </script>
