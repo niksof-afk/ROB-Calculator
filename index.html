@@ -311,6 +311,7 @@
           <button class="tab-btn" onclick="showTab('ts2',this)">Scenario 2 — NCR</button>
           <button class="tab-btn" onclick="showTab('ts3',this)">Scenario 3 — Fixed</button>
           <button class="tab-btn" onclick="showTab('tss',this)">Safety stock</button>
+          <button class="tab-btn" onclick="showTab('tch',this)">ROB Charts</button>
           <button class="tab-btn" onclick="showTab('thi',this)">History</button>
         </div>
 
@@ -366,6 +367,11 @@
             <thead><tr><th>Vessel</th><th class="num">Safety stock (Lt)</th><th>Location</th></tr></thead>
             <tbody id="ssBody"></tbody>
           </table>
+        </div>
+
+        <div id="tch" class="hidden">
+          <div class="section-title">ROB trend — last 12 months (all 3 grades)</div>
+          <div id="chartsGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem"></div>
         </div>
 
         <div id="thi" class="hidden">
@@ -475,10 +481,11 @@ function goPage(n){
   window.scrollTo(0,0);
 }
 function showTab(id,btn){
-  ['tr','ts1','ts2','ts3','tss','thi'].forEach(t=>document.getElementById(t).classList.add('hidden'));
+  ['tr','ts1','ts2','ts3','tss','tch','thi'].forEach(t=>document.getElementById(t).classList.add('hidden'));
   document.getElementById(id).classList.remove('hidden');
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
+  if(id==='tch') renderCharts();
 }
 
 // ── DRAG & DROP ───────────────────────────────────────────────────────────────
@@ -625,6 +632,120 @@ function buildFRTable(){
 // ── PRELOADED HISTORY (Dec 2024 – Apr 2026) ───────────────────────────────────
 const PRELOADED_HISTORY = {"Psara":{"DEC2024":3768,"JAN2025":5734,"FEB2025":1771,"MAR2025":5019,"APR2025":4481,"MAY2025":4589,"JUN2025":4944,"JUL2025":4296,"AUG2025":4898,"SEP2025":4547,"OCT2025":4606,"NOV2025":2797,"DEC2025":2254,"JAN2026":6501,"FEB2026":3353,"MAR2026":3225,"APR2026":4638},"Limnos":{"DEC2024":5577,"JAN2025":6460,"FEB2025":7000,"MAR2025":7600,"APR2025":6130,"MAY2025":4822,"JUN2025":3662,"JUL2025":7186,"AUG2025":6510,"SEP2025":6952,"OCT2025":5808,"NOV2025":10512,"DEC2025":6136,"JAN2026":6225,"FEB2026":3426,"MAR2026":4161,"APR2026":7971},"Kalymnos":{"DEC2024":6500,"JAN2025":10730,"FEB2025":7970,"MAR2025":8250,"APR2025":6500,"MAY2025":10500,"JUN2025":9760,"JUL2025":12740,"AUG2025":14750,"SEP2025":7700,"OCT2025":3700,"NOV2025":8500,"DEC2025":9100,"JAN2026":5800,"FEB2026":8242,"MAR2026":8242,"APR2026":9300},"Chios":{"DEC2024":12900,"JAN2025":12300,"FEB2025":4263,"MAR2025":10111,"APR2025":12604,"MAY2025":11904,"JUN2025":11696,"JUL2025":8400,"AUG2025":6000,"SEP2025":10200,"OCT2025":11600,"NOV2025":9400,"DEC2025":13800,"JAN2026":11300,"FEB2026":3200,"MAR2026":4600,"APR2026":11927},"Amorgos":{"DEC2024":9960,"JAN2025":11270,"FEB2025":10074,"MAR2025":11315,"APR2025":10550,"MAY2025":6010,"JUN2025":3020,"JUL2025":12120,"AUG2025":10600,"SEP2025":10000,"OCT2025":14500,"NOV2025":15490,"DEC2025":13810,"JAN2026":11300,"FEB2026":4900,"MAR2026":6200,"APR2026":8000},"Eleonora":{"MAR2026":8360,"APR2026":10540},"Roxanne":{}};
 
+// ── PRELOADED ROB HISTORY (all 3 grades) ─────────────────────────────────────
+const PRELOADED_ROB = {"Psara":{"cyl":{"DEC2024":60658,"JAN2025":53725,"FEB2025":51583,"MAR2025":45503,"APR2025":40086,"MAY2025":44939,"JUN2025":78620,"JUL2025":73428,"AUG2025":67506,"SEP2025":62194,"OCT2025":56775,"NOV2025":53395,"DEC2025":50560,"JAN2026":42701,"FEB2026":38647,"MAR2026":34747,"APR2026":38083},"sys":{"DEC2024":139843,"JAN2025":138766,"FEB2025":138863,"MAR2025":137612,"APR2025":136122,"MAY2025":134784,"JUN2025":149060,"JUL2025":148354,"AUG2025":147354,"SEP2025":146959,"OCT2025":145916,"NOV2025":145780,"DEC2025":141285,"JAN2026":138831,"FEB2026":138194,"MAR2026":137698,"APR2026":136380},"aux":{"DEC2024":13924,"JAN2025":11944,"FEB2025":10694,"MAR2025":10694,"APR2025":9710,"MAY2025":9190,"JUN2025":37259,"JUL2025":35600,"AUG2025":34680,"SEP2025":15176,"OCT2025":32620,"NOV2025":31220,"DEC2025":30315,"JAN2026":28155,"FEB2026":26805,"MAR2026":26305,"APR2026":25235}},"Limnos":{"cyl":{"DEC2024":52800,"JAN2025":43400,"FEB2025":34800,"MAR2025":24700,"APR2025":62060,"MAY2025":55470,"JUN2025":42286,"JUL2025":50590,"AUG2025":42353,"SEP2025":33158,"OCT2025":31830,"NOV2025":94296,"DEC2025":110622,"JAN2026":103335,"FEB2026":96546,"MAR2026":88297,"APR2026":80326},"sys":{"DEC2024":130230,"JAN2025":135346,"FEB2025":134846,"MAR2025":133830,"APR2025":132980,"MAY2025":132454,"JUN2025":132134,"JUL2025":144080,"AUG2025":144023,"SEP2025":144023,"OCT2025":142873,"NOV2025":142069,"DEC2025":142019,"JAN2026":141434,"FEB2026":141434,"MAR2026":139487,"APR2026":137957},"aux":{"DEC2024":33300,"JAN2025":33300,"FEB2025":30800,"MAR2025":30150,"APR2025":29170,"MAY2025":27556,"JUN2025":27556,"JUL2025":34900,"AUG2025":34475,"SEP2025":33124,"OCT2025":33124,"NOV2025":36856,"DEC2025":35952,"JAN2026":35226,"FEB2026":34226,"MAR2026":32026,"APR2026":30400}},"Kalymnos":{"cyl":{"DEC2024":97500,"JAN2025":86770,"FEB2025":115800,"MAR2025":107550,"APR2025":113050,"MAY2025":102550,"JUN2025":92790,"JUL2025":80050,"AUG2025":103100,"SEP2025":97400,"OCT2025":89900,"NOV2025":81400,"DEC2025":72300,"JAN2026":70450,"FEB2026":68850,"MAR2026":94650,"APR2026":85350},"sys":{"DEC2024":89700,"JAN2025":89200,"FEB2025":98100,"MAR2025":97300,"APR2025":96150,"MAY2025":95560,"JUN2025":94760,"JUL2025":94360,"AUG2025":93040,"SEP2025":92740,"OCT2025":92140,"NOV2025":91400,"DEC2025":91440,"JAN2026":87700,"FEB2026":81100,"MAR2026":88400,"APR2026":86800},"aux":{"DEC2024":9800,"JAN2025":6600,"FEB2025":19850,"MAR2025":17430,"APR2025":15290,"MAY2025":13740,"JUN2025":12730,"JUL2025":11560,"AUG2025":17530,"SEP2025":16270,"OCT2025":15240,"NOV2025":14200,"DEC2025":11900,"JAN2026":11240,"FEB2026":10140,"MAR2026":19150,"APR2026":18620}},"Chios":{"cyl":{"DEC2024":23600,"JAN2025":11300,"FEB2025":27937,"MAR2025":36146,"APR2025":23396,"MAY2025":116866,"JUN2025":104900,"JUL2025":96770,"AUG2025":92070,"SEP2025":81870,"OCT2025":64000,"NOV2025":54600,"DEC2025":47070,"JAN2026":110770,"FEB2026":107570,"MAR2026":110970,"APR2026":99043},"sys":{"DEC2024":65800,"JAN2025":63200,"FEB2025":63200,"MAR2025":62600,"APR2025":62600,"MAY2025":77600,"JUN2025":71900,"JUL2025":71500,"AUG2025":71500,"SEP2025":71400,"OCT2025":69700,"NOV2025":67800,"DEC2025":67200,"JAN2026":94800,"FEB2026":94800,"MAR2026":102800,"APR2026":102000},"aux":{"DEC2024":18200,"JAN2025":16200,"FEB2025":13350,"MAR2025":17192,"APR2025":14792,"MAY2025":21552,"JUN2025":18900,"JUL2025":16700,"AUG2025":14300,"SEP2025":11900,"OCT2025":9850,"NOV2025":17580,"DEC2025":15600,"JAN2026":42000,"FEB2026":36800,"MAR2026":41440,"APR2026":39280}},"Amorgos":{"cyl":{"DEC2024":17690,"JAN2025":18900,"FEB2025":25050,"MAR2025":57800,"APR2025":68250,"MAY2025":80240,"JUN2025":77220,"JUL2025":65100,"AUG2025":105500,"SEP2025":95500,"OCT2025":81000,"NOV2025":65510,"DEC2025":81700,"JAN2026":70400,"FEB2026":65500,"MAR2026":59300,"APR2026":81700},"sys":{"DEC2024":77100,"JAN2025":72850,"FEB2025":72850,"MAR2025":80800,"APR2025":77400,"MAY2025":75400,"JUN2025":75400,"JUL2025":75400,"AUG2025":88400,"SEP2025":87350,"OCT2025":86450,"NOV2025":85550,"DEC2025":84450,"JAN2026":83350,"FEB2026":82300,"MAR2026":80900,"APR2026":80400},"aux":{"DEC2024":13500,"JAN2025":12300,"FEB2025":10600,"MAR2025":21800,"APR2025":20300,"MAY2025":18800,"JUN2025":16200,"JUL2025":14600,"AUG2025":13200,"SEP2025":11950,"OCT2025":10800,"NOV2025":18100,"DEC2025":16500,"JAN2026":15600,"FEB2026":13900,"MAR2026":12100,"APR2026":16900}},"Eleonora":{"cyl":{"FEB2026":119610,"MAR2026":111250,"APR2026":110710},"sys":{"FEB2026":76500,"MAR2026":75100,"APR2026":74680},"aux":{"FEB2026":19460,"MAR2026":19460,"APR2026":18460}},"Roxanne":{"cyl":{"APR2026":78500},"sys":{"APR2026":69100},"aux":{"APR2026":20000}}};
+
+// ── ROB HISTORY STORAGE ───────────────────────────────────────────────────────
+function loadROBHistory(){
+  try{
+    const stored=localStorage.getItem('mg_robhist');
+    if(!stored){
+      localStorage.setItem('mg_robhist',JSON.stringify(PRELOADED_ROB));
+      return JSON.parse(JSON.stringify(PRELOADED_ROB));
+    }
+    const existing=JSON.parse(stored);
+    let merged=JSON.parse(JSON.stringify(PRELOADED_ROB));
+    for(const v of VESSELS){
+      if(!existing[v]) continue;
+      for(const grade of ['cyl','sys','aux']){
+        if(!existing[v][grade]) continue;
+        if(!merged[v]) merged[v]={cyl:{},sys:{},aux:{}};
+        if(!merged[v][grade]) merged[v][grade]={};
+        Object.assign(merged[v][grade], existing[v][grade]);
+      }
+    }
+    localStorage.setItem('mg_robhist',JSON.stringify(merged));
+    return merged;
+  }catch(e){ return JSON.parse(JSON.stringify(PRELOADED_ROB)); }
+}
+function saveROBHistory(h){ localStorage.setItem('mg_robhist',JSON.stringify(h)); }
+
+// Get last N sorted keys from a grade object
+function getLastNROB(gradeObj, n){
+  const entries=Object.entries(gradeObj).filter(([k,v])=>v>0);
+  entries.sort((a,b)=>a[0].localeCompare(b[0]));
+  return entries.slice(-n);
+}
+
+// ── SVG CHART GENERATOR (email-safe, no JS) ───────────────────────────────────
+function buildROBChartSVG(vessel, robHist, width=640, height=220){
+  const vData=robHist[vessel]; if(!vData) return '';
+  // Get last 12 months for each grade
+  const cylEntries=getLastNROB(vData.cyl||{},12);
+  const sysEntries=getLastNROB(vData.sys||{},12);
+  const auxEntries=getLastNROB(vData.aux||{},12);
+  // Use cyl labels as X axis (longest series)
+  const longest=cylEntries.length>=sysEntries.length?cylEntries:sysEntries;
+  if(longest.length<2) return '';
+  const labels=longest.map(e=>e[0]);
+
+  // Map values to labels
+  const mapVals=(entries)=>{
+    const m={};entries.forEach(([k,v])=>m[k]=v); return labels.map(l=>m[l]||null);
+  };
+  const cylVals=mapVals(cylEntries);
+  const sysVals=mapVals(sysEntries);
+  const auxVals=mapVals(auxEntries);
+
+  const pad={l:55,r:20,t:30,b:45};
+  const W=width-pad.l-pad.r, H=height-pad.t-pad.b;
+  const allVals=[...cylVals,...sysVals,...auxVals].filter(v=>v!=null);
+  const maxV=Math.max(...allVals)*1.1||1;
+  const minV=0;
+
+  const xPos=(i)=>pad.l + (i/(labels.length-1))*W;
+  const yPos=(v)=>v==null?null: pad.t + H - ((v-minV)/(maxV-minV))*H;
+
+  const polyline=(vals,color)=>{
+    const pts=vals.map((v,i)=>v!=null?`${xPos(i).toFixed(1)},${yPos(v).toFixed(1)}`:null).filter(p=>p);
+    if(pts.length<2) return '';
+    return `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>`;
+  };
+  const dots=(vals,color)=>vals.map((v,i)=>v!=null?`<circle cx="${xPos(i).toFixed(1)}" cy="${yPos(v).toFixed(1)}" r="3" fill="${color}"/>`:'').join('');
+
+  // Y grid lines
+  const gridLines=[];
+  const steps=4;
+  for(let i=0;i<=steps;i++){
+    const v=minV+(maxV-minV)*i/steps;
+    const y=yPos(v);
+    const label=v>=1000?(v/1000).toFixed(0)+'k':Math.round(v);
+    gridLines.push(`<line x1="${pad.l}" y1="${y.toFixed(1)}" x2="${pad.l+W}" y2="${y.toFixed(1)}" stroke="#e8edf5" stroke-width="1"/>`);
+    gridLines.push(`<text x="${pad.l-6}" y="${(y+4).toFixed(1)}" text-anchor="end" font-size="10" fill="#9aa5b8">${label}</text>`);
+  }
+
+  // X labels (every other one if crowded)
+  const xLabels=labels.map((l,i)=>{
+    if(labels.length>8 && i%2!==0) return '';
+    const x=xPos(i);
+    const short=l.replace('2025','\'25').replace('2026','\'26');
+    return `<text x="${x.toFixed(1)}" y="${(pad.t+H+28).toFixed(1)}" text-anchor="middle" font-size="9" fill="#9aa5b8">${short}</text>`;
+  }).join('');
+
+  const navy='#0a1628'; const blue='#1a56db'; const green='#1a9e6a'; const gold='#c8a84b';
+
+  let svg=`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" style="font-family:Arial,sans-serif">`;
+  svg+=`<rect width="${width}" height="${height}" fill="white" rx="4"/>`;
+  svg+=`<text x="${pad.l}" y="18" font-size="12" font-weight="bold" fill="${navy}">Minerva ${vessel} — ROB Trend (Lt)</text>`;
+  svg+=gridLines.join('');
+  svg+=`<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t+H}" stroke="#dde2ec" stroke-width="1"/>`;
+  svg+=`<line x1="${pad.l}" y1="${pad.t+H}" x2="${pad.l+W}" y2="${pad.t+H}" stroke="#dde2ec" stroke-width="1"/>`;
+  svg+=xLabels;
+  svg+=polyline(sysVals, blue)+dots(sysVals, blue);
+  svg+=polyline(cylVals, green)+dots(cylVals, green);
+  svg+=polyline(auxVals, gold)+dots(auxVals, gold);
+  // Legend
+  const ly=pad.t+H+40;
+  svg+=`<rect x="${pad.l}" y="${ly}" width="10" height="10" fill="${blue}"/>`;
+  svg+=`<text x="${pad.l+13}" y="${ly+9}" font-size="10" fill="#555">System oil</text>`;
+  svg+=`<rect x="${pad.l+80}" y="${ly}" width="10" height="10" fill="${green}"/>`;
+  svg+=`<text x="${pad.l+93}" y="${ly+9}" font-size="10" fill="#555">Cylinder oil</text>`;
+  svg+=`<rect x="${pad.l+170}" y="${ly}" width="10" height="10" fill="${gold}"/>`;
+  svg+=`<text x="${pad.l+183}" y="${ly+9}" font-size="10" fill="#555">Aux. engines</text>`;
+  svg+=`</svg>`;
+  return svg;
+}
+
 // ── HISTORY ───────────────────────────────────────────────────────────────────
 function loadHistory(){
   try{
@@ -653,6 +774,7 @@ function saveHistory(h){ localStorage.setItem('mg_cylhist',JSON.stringify(h)); }
 function clearHistory(){
   if(!confirm('Delete all stored consumption history? This will also remove the pre-loaded historical data.')) return;
   localStorage.removeItem('mg_cylhist');
+  localStorage.removeItem('mg_robhist');
   renderHistory();
 }
 function exportHistory(){
@@ -689,9 +811,9 @@ function getLastNMonthValues(hist, n){
 // ── CALCULATE ────────────────────────────────────────────────────────────────
 function runCalc(){
   const history=loadHistory();
-  // Determine year from current month — assume current year is 2026
-  const yearHint=2026;
-  // Store new consumption entries with year-aware key
+  const robHistory=loadROBHistory();
+  const yearHint=new Date().getFullYear();
+  // Store new consumption entries
   VESSELS.forEach(v=>{
     const d=parsedData[v]; if(!d||d.cylConsumed<=0) return;
     if(!history[v]) history[v]={};
@@ -699,6 +821,16 @@ function runCalc(){
     history[v][key]=d.cylConsumed;
   });
   saveHistory(history);
+  // Store new ROB entries for all 3 grades
+  VESSELS.forEach(v=>{
+    const d=parsedData[v]; if(!d) return;
+    const key=makeHistKey(d.monthName, yearHint);
+    if(!robHistory[v]) robHistory[v]={cyl:{},sys:{},aux:{}};
+    if(d.cylUsable>0) robHistory[v].cyl[key]=d.cylUsable;
+    if(d.sysTotal>0) robHistory[v].sys[key]=d.sysTotal;
+    if(d.geTotal>0) robHistory[v].aux[key]=d.geTotal;
+  });
+  saveROBHistory(robHistory);
 
   calcRes={};
   VESSELS.forEach(v=>{
@@ -850,6 +982,21 @@ function renderHistory(history){
   document.getElementById('histTable').innerHTML=html;
 }
 
+// ── CHARTS ────────────────────────────────────────────────────────────────────
+function renderCharts(){
+  const robHist=loadROBHistory();
+  const grid=document.getElementById('chartsGrid');
+  grid.innerHTML='';
+  VESSELS.forEach(v=>{
+    const svg=buildROBChartSVG(v, robHist, 480, 220);
+    if(!svg) return;
+    const div=document.createElement('div');
+    div.style.cssText='background:white;border:1px solid var(--border);border-radius:var(--radius);padding:.75rem';
+    div.innerHTML=svg;
+    grid.appendChild(div);
+  });
+}
+
 // ── EMAIL ─────────────────────────────────────────────────────────────────────
 function buildEmail(){
   const r=calcRes;
@@ -941,6 +1088,22 @@ function buildEmail(){
     });
     h+=`</tbody></table>`;
   }
+
+  // Charts section
+  const robHist=loadROBHistory();
+  h+=`<p style="margin:24px 0 8px;font-weight:600;color:${navy};font-size:13px;text-transform:uppercase;letter-spacing:.5px">ROB Trends — Past 12 Months</p>`;
+  h+=`<table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif"><tbody>`;
+  let col=0;
+  VESSELS.forEach(v=>{
+    const svg=buildROBChartSVG(v, robHist, 340, 200);
+    if(!svg) return;
+    if(col%2===0) h+=`<tr>`;
+    h+=`<td style="padding:6px;vertical-align:top">${svg}</td>`;
+    col++;
+    if(col%2===0) h+=`</tr>`;
+  });
+  if(col%2!==0) h+=`<td></td></tr>`;
+  h+=`</tbody></table>`;
 
   h+=`</div>`;
 
@@ -1066,6 +1229,21 @@ function exportExcel(){
   ws5['!cols']=[{wch:22},{wch:18},{wch:44}];
   applyExcelStyles(ws5, ssrows, null);
   XLSX.utils.book_append_sheet(wb,ws5,'Safety Stock');
+
+  // ROB Charts sheet — vessel names + note (SVG charts not embeddable in xlsx directly)
+  const chartRows=[['Vessel','Cylinder Oil — Apr ROB (Lt)','System Oil — Apr ROB (Lt)','Aux Engines — Apr ROB (Lt)','Note']];
+  const robHist=loadROBHistory();
+  VESSELS.forEach(v=>{
+    const d=parsedData[v];
+    const cyl=d?d.cylUsable:'';
+    const sys=d?d.sysTotal:'';
+    const aux=d?d.geTotal:'';
+    chartRows.push(['Minerva '+v, cyl||'', sys||'', aux||'', 'See email for trend charts']);
+  });
+  const ws6=XLSX.utils.aoa_to_sheet(chartRows);
+  ws6['!cols']=[{wch:22},{wch:24},{wch:24},{wch:22},{wch:28}];
+  applyExcelStyles(ws6, chartRows, null);
+  XLSX.utils.book_append_sheet(wb,ws6,'ROB Charts');
 
   XLSX.writeFile(wb,`Minerva_Gas_LO_ROB_${month}_${year}.xlsx`);
 }
