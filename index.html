@@ -491,35 +491,46 @@ function detectVessel(name){
   return null;
 }
 function findLatestMonthCol(ws){
-  const monthCols=[];
+  // Strategy: scan row 2 for 'ROB END OF XXX' labels to map month->robCol
+  // Then find the last month where CONSUMED col (robCol+1) has any non-zero value in key rows
+  // Fallback for new vessels (no consumption yet): use last month with ROB data in robCol
+  const MONTH_ABBR={JAN:'JANUARY',FEB:'FEBRUARY',MAR:'MARCH',APR:'APRIL',MAY:'MAY',
+    JUN:'JUNE',JUL:'JULY',AUG:'AUGUST',SEP:'SEPTEMBER',OCT:'OCTOBER',NOV:'NOVEMBER',DEC:'DECEMBER'};
+  const robColMap={};
   for(let c=1;c<=48;c++){
-    const cell=ws[XLSX.utils.encode_cell({r:0,c})];
+    const cell=ws[XLSX.utils.encode_cell({r:1,c:c-1})]; // row 2, 0-indexed
     if(!cell) continue;
-    const v=(cell.v||'').toString().trim().toUpperCase();
-    const mi=MONTHS.indexOf(v);
-    if(mi>-1) monthCols.push({monthIdx:mi, monthName:MONTHS[mi], col:c});
-  }
-  if(!monthCols.length) return null;
-
-  // Find first month with data in row 11, then track consecutive run from there
-  let lastGood=null;
-  let inRun=false;
-  for(let i=0;i<monthCols.length;i++){
-    const {monthIdx,monthName,col}=monthCols[i];
-    const cell=ws[XLSX.utils.encode_cell({r:10,c:col-1})];
-    const val=cell?cell.v:null;
-    const hasData=typeof val==='number' && val>0;
-    if(hasData){
-      inRun=true;
-      lastGood={monthIdx,monthName,robCol:col,conCol:col+1};
-    } else if(inRun){
-      break; // was in a run, hit a zero — stop here
+    const v=(cell.v||'').toString().toUpperCase();
+    if(v.indexOf('ROB END OF')===-1) continue;
+    for(const [abbr,full] of Object.entries(MONTH_ABBR)){
+      if(v.indexOf(abbr)>-1){ robColMap[full]=c; break; }
     }
-    // if !inRun && !hasData — skip leading zeros (vessel joined mid-year)
   }
-  if(lastGood) return lastGood;
-  const first=monthCols[0];
-  return {monthIdx:first.monthIdx,monthName:first.monthName,robCol:first.col,conCol:first.col+1};
+  if(!Object.keys(robColMap).length) return null;
+
+  // Check rows 11-18 for consumption (col=robCol+1) — means month actually occurred
+  let lastByConsumption=null;
+  let lastByROB=null;
+  for(const month of MONTHS){
+    const robCol=robColMap[month]; if(!robCol) continue;
+    const conCol=robCol+1;
+    // Check consumption
+    let hasCon=false;
+    for(let r=10;r<=18;r++){
+      const cell=ws[XLSX.utils.encode_cell({r,c:conCol-1})];
+      if(cell && typeof cell.v==='number' && cell.v>0){ hasCon=true; break; }
+    }
+    if(hasCon) lastByConsumption={monthName:month,robCol,conCol};
+    // Check ROB data
+    let hasROB=false;
+    for(let r=10;r<=18;r++){
+      const cell=ws[XLSX.utils.encode_cell({r,c:robCol-1})];
+      if(cell && typeof cell.v==='number' && cell.v>0){ hasROB=true; break; }
+    }
+    if(hasROB) lastByROB={monthName:month,robCol,conCol};
+  }
+  // Prefer consumption-based; fall back to ROB-based for new vessels
+  return lastByConsumption || lastByROB || null;
 }
 function getCell(ws,r,c){ const a=XLSX.utils.encode_cell({r,c}); return ws[a]?ws[a].v:null; }
 function extractData(wb, vessel){
