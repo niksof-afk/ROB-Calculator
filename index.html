@@ -337,7 +337,7 @@
 
         <div id="ts1" class="hidden">
           <div class="section-title">Scenario 1 — actual (12-month average consumption)</div>
-          <div class="msg msg-info show" style="margin-bottom:1rem">Minimum 2 months of stored history required per vessel. Builds up automatically each month.</div>
+          <div class="msg msg-info show" style="margin-bottom:1rem">Minimum 6 months of stored history required per vessel. Builds up automatically each month.</div>
           <table class="data-table">
             <thead><tr>
               <th>Vessel</th><th class="num">History (months)</th><th class="num">Avg daily (Lt/day)</th><th class="num">Usable ROB (Lt)</th><th class="num">Days remaining</th><th class="num">Months remaining</th>
@@ -933,7 +933,7 @@ function runCalc(){
     const hist=history[v]||{};
     const vals=getLastNMonthValues(hist,12);
     let s1avg=null, s1days=null;
-    if(vals.length>=2){
+    if(vals.length>=6){
       s1avg = vals.reduce((a,b)=>a+b,0)/vals.length/30;
       s1days = rob>0 ? rob/s1avg : null;
     }
@@ -977,7 +977,7 @@ function renderResults(history){
   const s1=document.getElementById('s1Body'); s1.innerHTML='';
   VESSELS.forEach(v=>{
     const r=calcRes[v];
-    const nd=r.histCount<2;
+    const nd=r.histCount<6;
     const dc=nd?'val-muted':daysClass(r.s1days);
     s1.innerHTML+=`<tr>
       <td class="vessel-name">Minerva ${v}</td>
