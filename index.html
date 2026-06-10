@@ -555,38 +555,75 @@ function findLatestMonthCol(ws){
   return lastByConsumption || lastByROB || null;
 }
 function getCell(ws,r,c){ const a=XLSX.utils.encode_cell({r,c}); return ws[a]?ws[a].v:null; }
+
+// Find row numbers dynamically by scanning col D for TOTAL labels
+// Returns {sysTotalRow, cylTotalRow, cylSSRow, geTotalRow}
+function findTotalRows(ws){
+  // Scan rows 3-25 in col D (index 3, 0-based) for TOTAL
+  // We expect: TOTAL(sys) first, then TOTAL(cyl), then TOTAL(ge)
+  const totals=[];
+  for(let r=3;r<=25;r++){
+    const cell=ws[XLSX.utils.encode_cell({r:r-1,c:3})]; // col D, 0-indexed
+    if(cell && typeof cell.v==='string' && cell.v.trim().toUpperCase()==='TOTAL'){
+      totals.push(r);
+    }
+  }
+  // Also find Safety Stock row
+  let ssRow=null;
+  for(let r=3;r<=25;r++){
+    const cell=ws[XLSX.utils.encode_cell({r:r-1,c:3})];
+    if(cell && typeof cell.v==='string' && cell.v.toLowerCase().includes('safety')){
+      ssRow=r; break;
+    }
+  }
+  return {
+    sysTotalRow: totals[0]||11,
+    cylTotalRow: totals[1]||15,
+    geTotalRow:  totals[2]||18,
+    cylSSRow:    ssRow||null,
+  };
+}
+
 function extractData(wb, vessel){
   const ws=wb.Sheets['Sheet1']; if(!ws) return null;
   const info=findLatestMonthCol(ws); if(!info) return null;
   const {monthName,robCol,conCol}=info;
-  const g=(r,c)=>getCell(ws,r-1,c-1)||0;
+  const g=(r,c)=>{ if(!r) return 0; const a=XLSX.utils.encode_cell({r:r-1,c:c-1}); const cell=ws[a]; return (cell&&cell.t==='n'&&typeof cell.v==='number')?cell.v:0; };
+
+  const {sysTotalRow,cylTotalRow,geTotalRow,cylSSRow}=findTotalRows(ws);
 
   let cylTotal=0,cylSS=0,sysTotal=0,geTotal=0,cylConsumed=0;
-  if(vessel==='Psara'){
-    cylTotal = g(13,robCol)+g(16,robCol);
-    cylConsumed = g(13,conCol)+g(16,conCol);
-    sysTotal=g(11,robCol); geTotal=g(19,robCol);
-  } else if(vessel==='Limnos'){
-    cylTotal = g(13,robCol)+g(16,robCol);
-    cylConsumed = g(13,conCol)+g(16,conCol);
-    sysTotal=g(11,robCol); geTotal=g(19,robCol);
-  } else if(vessel==='Kalymnos'){
-    cylTotal=g(15,robCol); cylConsumed=g(15,conCol);
-    const ssv=g(14,robCol); cylSS=ssv>0?ssv:SS_DEFAULTS.Kalymnos||3800;
-    sysTotal=g(11,robCol); geTotal=g(18,robCol);
-  } else if(vessel==='Chios'){
-    cylTotal=g(15,robCol); cylConsumed=g(15,conCol);
-    const ssv=g(14,robCol); cylSS=ssv>0?ssv:SS_DEFAULTS.Chios||6270;
-    sysTotal=g(11,robCol); geTotal=g(18,robCol);
-  } else if(vessel==='Amorgos'){
-    cylTotal=g(16,robCol); cylConsumed=g(16,conCol);
-    sysTotal=g(11,robCol); geTotal=g(19,robCol);
-  } else if(vessel==='Eleonora'){
-    cylTotal=g(14,robCol); cylConsumed=g(14,conCol);
-    sysTotal=g(11,robCol); geTotal=g(17,robCol);
-  } else if(vessel==='Roxanne'){
-    cylTotal=g(15,robCol); cylConsumed=g(15,conCol);
-    sysTotal=g(11,robCol); geTotal=g(18,robCol);
+
+  if(vessel==='Psara'||vessel==='Limnos'){
+    // Two cyl grades: TOTAL(cyl1) and TOTAL(cyl2) — use totals[1] and totals[2], ge is totals[3]
+    // Re-scan for all totals
+    const allTotals=[];
+    for(let r=3;r<=25;r++){
+      const cell=ws[XLSX.utils.encode_cell({r:r-1,c:3})];
+      if(cell && typeof cell.v==='string' && cell.v.trim().toUpperCase()==='TOTAL') allTotals.push(r);
+    }
+    const sysR=allTotals[0]||11;
+    const cyl1R=allTotals[1]||13;
+    const cyl2R=allTotals[2]||16;
+    const geR=allTotals[3]||19;
+    cylTotal=g(cyl1R,robCol)+g(cyl2R,robCol);
+    cylConsumed=g(cyl1R,conCol)+g(cyl2R,conCol);
+    sysTotal=g(sysR,robCol); geTotal=g(geR,robCol);
+  } else {
+    // Single cyl grade vessels: Kalymnos, Chios, Amorgos, Eleonora, Roxanne
+    cylTotal=g(cylTotalRow,robCol);
+    cylConsumed=g(cylTotalRow,conCol);
+    sysTotal=g(sysTotalRow,robCol);
+    geTotal=g(geTotalRow,robCol);
+    if(cylSSRow){
+      const ssv=g(cylSSRow,robCol);
+      if(ssv>0) cylSS=ssv;
+      else if(vessel==='Kalymnos') cylSS=SS_DEFAULTS.Kalymnos||3800;
+      else if(vessel==='Chios') cylSS=SS_DEFAULTS.Chios||6270;
+    } else {
+      if(vessel==='Kalymnos') cylSS=SS_DEFAULTS.Kalymnos||3800;
+      else if(vessel==='Chios') cylSS=SS_DEFAULTS.Chios||6270;
+    }
   }
   return {vessel,monthName,cylTotal,cylSS,cylUsable:cylTotal-cylSS,sysTotal,geTotal,cylConsumed};
 }
