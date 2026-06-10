@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minerva Gas — LO ROB Calculator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --navy: #0a1628;
+    --navy-mid: #142240;
+    --navy-light: #1e3358;
+    --accent: #2e7fff;
+    --accent-light: #5b9fff;
+    --gold: #c8a84b;
+    --bg: #f5f7fa;
+    --surface: #ffffff;
+    --border: #dde2ec;
+    --text: #1a2540;
+    --text-muted: #6b7a99;
+    --green: #1a9e6a;
+    --green-bg: #e6f7f1;
+    --amber: #b07d12;
+    --amber-bg: #fdf3dc;
+    --red: #c0392b;
+    --red-bg: #fdecea;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+  /* LOGIN */
+  #loginScreen {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-mid) 60%, var(--navy-light) 100%);
+  }
+  .login-box {
+    background: var(--surface); border-radius: var(--radius-lg); padding: 2.5rem 2rem;
+    width: 360px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;
+  }
+  .login-logo { font-size: 13px; letter-spacing: 3px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-bottom: .5rem; }
+  .login-title { font-size: 22px; font-weight: 600; color: var(--navy); margin-bottom: .25rem; }
+  .login-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 2rem; }
+  .ship-icon { font-size: 48px; margin-bottom: 1rem; }
+  .login-box input[type=password] {
+    width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius);
+    font-size: 15px; margin-bottom: .75rem; outline: none; transition: border .2s;
+  }
+  .login-box input[type=password]:focus { border-color: var(--accent); }
+  .login-btn {
+    width: 100%; padding: 10px; background: var(--navy); color: white; border: none;
+    border-radius: var(--radius); font-size: 15px; font-weight: 500; cursor: pointer; transition: background .2s;
+  }
+  .login-btn:hover { background: var(--navy-light); }
+  .login-err { color: var(--red); font-size: 13px; margin-top: .5rem; min-height: 20px; }
+
+  /* APP */
+  #app { display: none; min-height: 100vh; }
+  .topbar {
+    background: var(--navy); color: white; padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between; height: 56px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .topbar-brand { display: flex; align-items: center; gap: 12px; }
+  .topbar-brand .brand-name { font-size: 15px; font-weight: 600; letter-spacing: .5px; }
+  .topbar-brand .brand-sub { font-size: 11px; color: rgba(255,255,255,.5); letter-spacing: 1px; text-transform: uppercase; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .topbar-month { font-size: 13px; color: rgba(255,255,255,.6); }
+  .logout-btn {
+    font-size: 12px; color: rgba(255,255,255,.5); background: none; border: 1px solid rgba(255,255,255,.15);
+    padding: 4px 12px; border-radius: var(--radius); cursor: pointer; transition: all .2s;
+  }
+  .logout-btn:hover { color: white; border-color: rgba(255,255,255,.4); }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+
+  /* STEP NAV */
+  .step-nav { display: flex; align-items: center; margin-bottom: 2rem; }
+  .step-item { display: flex; align-items: center; gap: 8px; }
+  .step-num {
+    width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600;
+    color: var(--text-muted); background: var(--surface); transition: all .2s; flex-shrink: 0;
+  }
+  .step-num.active { background: var(--navy); color: white; border-color: var(--navy); }
+  .step-num.done { background: var(--green); color: white; border-color: var(--green); }
+  .step-label { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+  .step-label.active { color: var(--text); }
+  .step-line { flex: 1; height: 1px; background: var(--border); margin: 0 12px; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; margin-bottom: 1.25rem; }
+  .card-title { font-size: 15px; font-weight: 600; color: var(--navy); margin-bottom: .25rem; }
+  .card-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 1rem; }
+  .section-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 1rem; }
+
+  /* UPLOAD */
+  .upload-zone {
+    border: 2px dashed var(--border); border-radius: var(--radius-lg); padding: 2.5rem;
+    text-align: center; cursor: pointer; transition: all .2s; background: var(--bg);
+  }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: #eef4ff; }
+  .upload-icon { font-size: 40px; margin-bottom: .75rem; }
+  .upload-zone p { color: var(--text-muted); font-size: 14px; }
+  .upload-zone strong { color: var(--text); }
+  .file-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 1rem; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+    padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .chip.ok { border-color: #a3d9c0; background: var(--green-bg); color: var(--green); }
+  .chip.err { border-color: #f5b7b1; background: var(--red-bg); color: var(--red); }
+  .chip.warn { border-color: #f9d89a; background: var(--amber-bg); color: var(--amber); }
+
+  /* FEED RATE TABLE */
+  .fr-table { width: 100%; border-collapse: collapse; }
+  .fr-table th { text-align: left; padding: 8px 12px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); border-bottom: 2px solid var(--border); }
+  .fr-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .fr-table tr:last-child td { border-bottom: none; }
+  .fr-table input[type=number] { width: 80px; padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; text-align: center; outline: none; transition: border .2s; }
+  .fr-table input[type=number]:focus { border-color: var(--accent); }
+  .engine-badge {
+    display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px;
+    font-weight: 600; letter-spacing: .3px;
+  }
+  .badge-dsme { background: #e8f0fe; color: #1a56db; }
+  .badge-shi { background: #fdf3dc; color: #92610a; }
+
+  /* RESULTS TABS */
+  .tab-bar { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 1.5rem; overflow-x: auto; }
+  .tab-btn {
+    padding: 10px 18px; font-size: 13px; font-weight: 500; border: none; background: none;
+    cursor: pointer; color: var(--text-muted); border-bottom: 3px solid transparent; margin-bottom: -2px;
+    white-space: nowrap; transition: all .15s;
+  }
+  .tab-btn.active { color: var(--navy); border-bottom-color: var(--accent); }
+  .tab-btn:hover { color: var(--text); }
+
+  /* DATA TABLES */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table th {
+    text-align: left; padding: 9px 12px; font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .4px; color: var(--text-muted);
+    background: var(--bg); border-bottom: 1px solid var(--border);
+  }
+  .data-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: var(--bg); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .vessel-name { font-weight: 600; color: var(--navy); }
+  .val-green { color: var(--green); font-weight: 600; }
+  .val-amber { color: var(--amber); font-weight: 600; }
+  .val-red { color: var(--red); font-weight: 600; }
+  .val-muted { color: var(--text-muted); font-style: italic; }
+
+  /* OUTPUT BOX */
+  .email-box {
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 1.25rem; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.7;
+    white-space: pre-wrap; max-height: 380px; overflow-y: auto;
+  }
+
+  /* BUTTONS */
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px; padding: 9px 18px;
+    border-radius: var(--radius); font-size: 14px; font-weight: 500; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    transition: all .15s; text-decoration: none;
+  }
+  .btn:hover { background: var(--bg); border-color: #b0bbd4; }
+  .btn-primary { background: var(--navy); color: white; border-color: var(--navy); }
+  .btn-primary:hover { background: var(--navy-light); }
+  .btn-accent { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn-accent:hover { background: var(--accent-light); }
+  .btn-green { background: var(--green); color: white; border-color: var(--green); }
+  .btn-green:hover { opacity: .88; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 1.25rem; }
+  .btn-row.right { justify-content: flex-end; }
+  .btn-row.space { justify-content: space-between; }
+
+  /* MESSAGES */
+  .msg { padding: 10px 14px; border-radius: var(--radius); font-size: 13px; margin-top: .75rem; display: none; }
+  .msg.show { display: block; }
+  .msg-ok { background: var(--green-bg); color: var(--green); border: 1px solid #a3d9c0; }
+  .msg-err { background: var(--red-bg); color: var(--red); border: 1px solid #f5b7b1; }
+  .msg-info { background: #eef4ff; color: #1a56db; border: 1px solid #b3ccf8; }
+
+  /* HISTORY */
+  .hist-wrapper { overflow-x: auto; }
+  .hist-table { border-collapse: collapse; font-size: 12px; min-width: 900px; }
+  .hist-table th { padding: 6px 10px; text-align: right; font-size: 11px; font-weight: 600; color: var(--text-muted); border-bottom: 1px solid var(--border); background: var(--bg); }
+  .hist-table th:first-child { text-align: left; }
+  .hist-table td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--border); }
+  .hist-table td:first-child { text-align: left; font-weight: 600; color: var(--navy); }
+  .hist-table tr:last-child td { border-bottom: none; }
+  .hist-val { color: var(--text); }
+  .hist-empty { color: #ccc; }
+  .hist-avg { font-weight: 600; color: var(--accent); }
+
+  /* MISC */
+  .info-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .info-pill { background: var(--bg); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; font-size: 12px; color: var(--text-muted); }
+  .info-pill strong { color: var(--text); }
+  hr.divider { border: none; border-top: 1px solid var(--border); margin: 1.25rem 0; }
+  .gold-line { width: 40px; height: 3px; background: var(--gold); border-radius: 2px; margin-bottom: .75rem; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="ship-icon">🚢</div>
+    <div class="login-logo">Minerva Gas</div>
+    <div class="login-title">LO ROB Calculator</div>
+    <div class="login-sub">Monthly lub oil sufficiency analysis</div>
+    <input type="password" id="pwInput" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="login-btn" onclick="doLogin()">Sign in</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div>
+        <div class="brand-name">Minerva Gas — LO ROB Calculator</div>
+        <div class="brand-sub">Lub Oil Sufficiency Analysis</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-month" id="topMonth"></span>
+      <button class="logout-btn" onclick="doLogout()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- STEP NAV -->
+    <div class="step-nav">
+      <div class="step-item">
+        <div class="step-num active" id="sn1">1</div>
+        <div class="step-label active" id="sl1">Upload forms</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item">
+        <div class="step-num" id="sn2">2</div>
+        <div class="step-label" id="sl2">Feed rate & BN</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item">
+        <div class="step-num" id="sn3">3</div>
+        <div class="step-label" id="sl3">Results</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item">
+        <div class="step-num" id="sn4">4</div>
+        <div class="step-label" id="sl4">Export</div>
+      </div>
+    </div>
+
+    <!-- PAGE 1: UPLOAD -->
+    <div id="page1">
+      <div class="card">
+        <div class="gold-line"></div>
+        <div class="card-title">Upload V-E-30 vessel forms</div>
+        <div class="card-sub">Upload the 7 xlsm files. Vessel name is detected automatically from the filename. The tool reads the latest month's ROB totals and cylinder oil consumption.</div>
+        <div class="upload-zone" id="dropzone" onclick="document.getElementById('fileInput').click()" ondragover="ev(event,'drag')" ondragleave="ev(event,'leave')" ondrop="ev(event,'drop')">
+          <div class="upload-icon">📂</div>
+          <p><strong>Click to select files</strong> or drag & drop here</p>
+          <p style="margin-top:4px;font-size:12px">7 × V-E-30 .xlsm files · All vessels</p>
+          <input type="file" id="fileInput" multiple accept=".xlsm,.xlsx" style="display:none" onchange="handleFiles(this.files)">
+        </div>
+        <div class="file-chips" id="fileChips"></div>
+        <div class="msg" id="parseMsg"></div>
+      </div>
+      <div class="btn-row right">
+        <button class="btn btn-primary" id="btn1" disabled onclick="goPage(2)">Next: Feed rate & BN →</button>
+      </div>
+    </div>
+
+    <!-- PAGE 2: FEED RATE -->
+    <div id="page2" class="hidden">
+      <div class="card">
+        <div class="gold-line"></div>
+        <div class="card-title">Feed rate & BN settings</div>
+        <div class="card-sub">Enter current values per vessel. Used for Scenario 2 (continuous NCR operation). Update only when settings change.</div>
+        <table class="fr-table">
+          <thead><tr>
+            <th>Vessel</th><th>Feed rate (g/kWh)</th><th>BN</th><th>Engine type</th><th style="text-align:right">NCR (kW)</th>
+          </tr></thead>
+          <tbody id="frBody"></tbody>
+        </table>
+      </div>
+      <div class="btn-row space">
+        <button class="btn" onclick="goPage(1)">← Back</button>
+        <button class="btn btn-primary" onclick="runCalc()">Calculate →</button>
+      </div>
+    </div>
+
+    <!-- PAGE 3: RESULTS -->
+    <div id="page3" class="hidden">
+      <div class="card">
+        <div class="tab-bar">
+          <button class="tab-btn active" onclick="showTab('tr',this)">ROB summary</button>
+          <button class="tab-btn" onclick="showTab('ts1',this)">Scenario 1 — Actual</button>
+          <button class="tab-btn" onclick="showTab('ts2',this)">Scenario 2 — NCR</button>
+          <button class="tab-btn" onclick="showTab('ts3',this)">Scenario 3 — Fixed</button>
+          <button class="tab-btn" onclick="showTab('tss',this)">Safety stock</button>
+          <button class="tab-btn" onclick="showTab('thi',this)">History</button>
+        </div>
+
+        <div id="tr">
+          <div class="section-title">Cylinder oil ROB — usable quantities</div>
+          <table class="data-table">
+            <thead><tr>
+              <th>Vessel</th><th>Month</th><th class="num">CylOil total (Lt)</th><th class="num">Safety stock (Lt)</th><th class="num">Usable ROB (Lt)</th><th class="num">System oil (Lt)</th><th class="num">GE oil (Lt)</th>
+            </tr></thead>
+            <tbody id="robBody"></tbody>
+          </table>
+        </div>
+
+        <div id="ts1" class="hidden">
+          <div class="section-title">Scenario 1 — actual (12-month average consumption)</div>
+          <div class="msg msg-info show" style="margin-bottom:1rem">Minimum 2 months of stored history required per vessel. Builds up automatically each month.</div>
+          <table class="data-table">
+            <thead><tr>
+              <th>Vessel</th><th class="num">History (months)</th><th class="num">Avg daily (Lt/day)</th><th class="num">Usable ROB (Lt)</th><th class="num">Days remaining</th><th class="num">Months remaining</th>
+            </tr></thead>
+            <tbody id="s1Body"></tbody>
+          </table>
+        </div>
+
+        <div id="ts2" class="hidden">
+          <div class="section-title">Scenario 2 — continuous operation at NCR, current feed rate</div>
+          <table class="data-table">
+            <thead><tr>
+              <th>Vessel</th><th class="num">Feed rate (g/kWh)</th><th class="num">NCR (kW)</th><th class="num">Daily consump. (Lt)</th><th class="num">Usable ROB (Lt)</th><th class="num">Days remaining</th><th class="num">Months remaining</th>
+            </tr></thead>
+            <tbody id="s2Body"></tbody>
+          </table>
+        </div>
+
+        <div id="ts3" class="hidden">
+          <div class="section-title">Scenario 3 — fixed monthly assumption</div>
+          <div class="info-row">
+            <div class="info-pill">DSME: <strong>6,000 Lt/month</strong></div>
+            <div class="info-pill">SHI (Kalymnos/Chios/Amorgos): <strong>9,000 Lt/month</strong></div>
+            <div class="info-pill">SHI (Eleonora/Roxanne): <strong>9,000 Lt/month</strong></div>
+          </div>
+          <table class="data-table">
+            <thead><tr>
+              <th>Vessel</th><th class="num">Monthly alloc. (Lt)</th><th class="num">Daily rate (Lt)</th><th class="num">Usable ROB (Lt)</th><th class="num">Days remaining</th><th class="num">Months remaining</th>
+            </tr></thead>
+            <tbody id="s3Body"></tbody>
+          </table>
+        </div>
+
+        <div id="tss" class="hidden">
+          <div class="section-title">Safety stock — excluded from all calculations</div>
+          <table class="data-table">
+            <thead><tr><th>Vessel</th><th class="num">Safety stock (Lt)</th><th>Location</th></tr></thead>
+            <tbody id="ssBody"></tbody>
+          </table>
+        </div>
+
+        <div id="thi" class="hidden">
+          <div class="section-title">Cylinder oil consumption history</div>
+          <div class="hist-wrapper">
+            <table class="hist-table" id="histTable"></table>
+          </div>
+          <hr class="divider">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" onclick="exportHistory()">⬇ Export history JSON</button>
+            <label class="btn" style="cursor:pointer">⬆ Import history JSON<input type="file" accept=".json" style="display:none" onchange="importHistory(this)"></label>
+            <button class="btn" style="color:var(--red);border-color:#f5b7b1" onclick="clearHistory()">🗑 Clear all history</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row space">
+        <button class="btn" onclick="goPage(2)">← Back</button>
+        <button class="btn btn-primary" onclick="goPage(4)">Generate outputs →</button>
+      </div>
+    </div>
+
+    <!-- PAGE 4: EXPORT -->
+    <div id="page4" class="hidden">
+      <div class="card">
+        <div class="gold-line"></div>
+        <div class="card-title">Email body</div>
+        <div class="card-sub">Copy and paste directly into Outlook.</div>
+        <div class="email-box" id="emailBox"></div>
+        <div class="btn-row right">
+          <button class="btn" onclick="copyEmail(this)">📋 Copy to clipboard</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="gold-line"></div>
+        <div class="card-title">Excel export</div>
+        <div class="card-sub">Downloads a formatted workbook with all 5 tables.</div>
+        <button class="btn btn-green" onclick="exportExcel()">⬇ Download Excel</button>
+      </div>
+      <div class="btn-row space">
+        <button class="btn" onclick="goPage(3)">← Back to results</button>
+        <button class="btn btn-accent" onclick="startOver()">↺ New month</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ───────────────────────────────────────────────────────────────────
+const PW_HASH = '4b0f4ba4f56a5f02d88b3f1f4f0c9a2d9a5e8f3c1b2d4e6f7a8b9c0d1e2f3a4'; // placeholder, replaced below
+const CORRECT_PW = 'Minervagas12';
+const SG = 0.9153;
+const VESSELS = ['Psara','Limnos','Kalymnos','Chios','Amorgos','Eleonora','Roxanne'];
+const ENGINE  = {Psara:'DSME',Limnos:'DSME',Kalymnos:'SHI',Chios:'SHI',Amorgos:'SHI',Eleonora:'SHI2',Roxanne:'SHI2'};
+const NCR_KW  = {DSME:10700, SHI:10250, SHI2:9900};
+const S3_MON  = {DSME:6000, SHI:9000, SHI2:9000};
+const DEFAULT_FR = {Psara:0.7,Limnos:0.8,Kalymnos:0.85,Chios:0.87,Amorgos:1.0,Eleonora:1.2,Roxanne:1.2};
+const DEFAULT_BN = {Psara:90,Limnos:50,Kalymnos:40,Chios:40,Amorgos:40,Eleonora:40,Roxanne:40};
+const SS_DEFAULTS = {Kalymnos:3800,Chios:6270};
+const MONTHS = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+
+// ── STATE ────────────────────────────────────────────────────────────────────
+let parsedData = {};
+let calcRes = {};
+let currentMonth = '';
+
+// ── LOGIN ────────────────────────────────────────────────────────────────────
+function doLogin(){
+  const v = document.getElementById('pwInput').value;
+  if(v === CORRECT_PW){
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('app').style.display='block';
+    localStorage.setItem('mg_session','1');
+  } else {
+    document.getElementById('loginErr').textContent='Incorrect password. Please try again.';
+    document.getElementById('pwInput').value='';
+    document.getElementById('pwInput').focus();
+  }
+}
+function doLogout(){
+  localStorage.removeItem('mg_session');
+  location.reload();
+}
+window.onload = function(){
+  if(localStorage.getItem('mg_session')==='1'){
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('app').style.display='block';
+  }
+};
+
+// ── STEPS ────────────────────────────────────────────────────────────────────
+function goPage(n){
+  [1,2,3,4].forEach(i=>{
+    document.getElementById('page'+i).classList.toggle('hidden', i!==n);
+    const num=document.getElementById('sn'+i), lbl=document.getElementById('sl'+i);
+    num.classList.remove('active','done');
+    lbl.classList.remove('active');
+    if(i<n){ num.classList.add('done'); }
+    else if(i===n){ num.classList.add('active'); lbl.classList.add('active'); }
+  });
+  window.scrollTo(0,0);
+}
+function showTab(id,btn){
+  ['tr','ts1','ts2','ts3','tss','thi'].forEach(t=>document.getElementById(t).classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ── DRAG & DROP ───────────────────────────────────────────────────────────────
+function ev(e, type){
+  e.preventDefault();
+  const dz = document.getElementById('dropzone');
+  if(type==='drag') dz.classList.add('drag');
+  else if(type==='leave') dz.classList.remove('drag');
+  else if(type==='drop'){ dz.classList.remove('drag'); handleFiles(e.dataTransfer.files); }
+}
+
+// ── FILE PARSING ──────────────────────────────────────────────────────────────
+function detectVessel(name){
+  const u = name.toUpperCase();
+  for(const v of VESSELS){ if(u.includes(v.toUpperCase())) return v; }
+  return null;
+}
+function findLatestMonthCol(ws){
+  let lastMonthIdx=-1, lastCol=-1;
+  for(let c=1;c<=48;c++){
+    const cell=ws[XLSX.utils.encode_cell({r:0,c})];
+    if(!cell) continue;
+    const v=(cell.v||'').toString().trim().toUpperCase();
+    const mi=MONTHS.indexOf(v);
+    if(mi>-1){ lastMonthIdx=mi; lastCol=c; }
+  }
+  if(lastMonthIdx===-1) return null;
+  return { monthIdx:lastMonthIdx, monthName:MONTHS[lastMonthIdx], robCol:lastCol+1, conCol:lastCol+2 };
+}
+function getCell(ws,r,c){ const a=XLSX.utils.encode_cell({r,c}); return ws[a]?ws[a].v:null; }
+function extractData(wb, vessel){
+  const ws=wb.Sheets['Sheet1']; if(!ws) return null;
+  const info=findLatestMonthCol(ws); if(!info) return null;
+  const {monthName,robCol,conCol}=info;
+  const g=(r,c)=>getCell(ws,r-1,c-1)||0;
+
+  let cylTotal=0,cylSS=0,sysTotal=0,geTotal=0,cylConsumed=0;
+  if(vessel==='Psara'){
+    cylTotal = g(13,robCol)+g(16,robCol);
+    cylConsumed = g(13,conCol)+g(16,conCol);
+    sysTotal=g(11,robCol); geTotal=g(19,robCol);
+  } else if(vessel==='Limnos'){
+    cylTotal = g(13,robCol)+g(16,robCol);
+    cylConsumed = g(13,conCol)+g(16,conCol);
+    sysTotal=g(11,robCol); geTotal=g(19,robCol);
+  } else if(vessel==='Kalymnos'){
+    cylTotal=g(15,robCol); cylConsumed=g(15,conCol);
+    const ssv=g(14,robCol); cylSS=ssv>0?ssv:SS_DEFAULTS.Kalymnos||3800;
+    sysTotal=g(11,robCol); geTotal=g(18,robCol);
+  } else if(vessel==='Chios'){
+    cylTotal=g(15,robCol); cylConsumed=g(15,conCol);
+    const ssv=g(14,robCol); cylSS=ssv>0?ssv:SS_DEFAULTS.Chios||6270;
+    sysTotal=g(11,robCol); geTotal=g(18,robCol);
+  } else if(vessel==='Amorgos'){
+    cylTotal=g(16,robCol); cylConsumed=g(16,conCol);
+    sysTotal=g(11,robCol); geTotal=g(19,robCol);
+  } else if(vessel==='Eleonora'){
+    cylTotal=g(14,robCol); cylConsumed=g(14,conCol);
+    sysTotal=g(11,robCol); geTotal=g(17,robCol);
+  } else if(vessel==='Roxanne'){
+    cylTotal=g(15,robCol); cylConsumed=g(15,conCol);
+    sysTotal=g(11,robCol); geTotal=g(18,robCol);
+  }
+  return {vessel,monthName,cylTotal,cylSS,cylUsable:cylTotal-cylSS,sysTotal,geTotal,cylConsumed};
+}
+function handleFiles(files){
+  parsedData={};
+  document.getElementById('fileChips').innerHTML='';
+  const msg=document.getElementById('parseMsg');
+  msg.className='msg'; msg.textContent='';
+  let done=0, total=files.length;
+  if(!total) return;
+  Array.from(files).forEach(file=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      let chip=document.createElement('div');
+      chip.className='chip';
+      try{
+        const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+        const vessel=detectVessel(file.name);
+        if(!vessel){ chip.classList.add('err'); chip.innerHTML='⚠ '+file.name.substring(0,28)+' (unrecognised)'; }
+        else{
+          const data=extractData(wb,vessel);
+          if(data){ parsedData[vessel]=data; chip.classList.add('ok'); chip.textContent='✓ '+vessel+' ('+cap(data.monthName)+')'; if(!currentMonth) currentMonth=data.monthName; }
+          else{ chip.classList.add('err'); chip.textContent='✗ '+vessel+': parse error'; }
+        }
+      }catch(ex){ chip.classList.add('err'); chip.textContent='✗ '+file.name.substring(0,28); }
+      document.getElementById('fileChips').appendChild(chip);
+      done++;
+      if(done===total){
+        const n=Object.keys(parsedData).length;
+        if(n>0){ msg.className='msg msg-ok show'; msg.textContent=n+' vessel'+(n>1?'s':'')+' parsed successfully.'; document.getElementById('btn1').disabled=false; }
+        else{ msg.className='msg msg-err show'; msg.textContent='No vessels could be parsed. Check filenames contain the vessel name.'; document.getElementById('btn1').disabled=true; }
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ── PAGE 2: FEED RATE TABLE ────────────────────────────────────────────────────
+function buildFRTable(){
+  const tb=document.getElementById('frBody'); tb.innerHTML='';
+  VESSELS.forEach(v=>{
+    const eng=ENGINE[v];
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td class="vessel-name">${v}</td>
+      <td><input type="number" id="fr_${v}" value="${DEFAULT_FR[v]}" step="0.01" min="0.1" max="3.0"></td>
+      <td><input type="number" id="bn_${v}" value="${DEFAULT_BN[v]}" step="1" min="10" max="140"></td>
+      <td><span class="engine-badge ${eng==='DSME'?'badge-dsme':'badge-shi'}">${eng==='DSME'?'DSME 10700':'SHI '+(NCR_KW[eng]||'')}</span></td>
+      <td class="num">${(NCR_KW[eng]||0).toLocaleString()}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+// ── HISTORY ───────────────────────────────────────────────────────────────────
+function loadHistory(){ try{ return JSON.parse(localStorage.getItem('mg_cylhist')||'{}'); }catch(e){return{};} }
+function saveHistory(h){ localStorage.setItem('mg_cylhist',JSON.stringify(h)); }
+function clearHistory(){ if(!confirm('Delete all stored consumption history?')) return; localStorage.removeItem('mg_cylhist'); renderHistory(); }
+function exportHistory(){
+  const h=loadHistory();
+  const blob=new Blob([JSON.stringify(h,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='minerva_gas_cyl_history.json'; a.click();
+}
+function importHistory(input){
+  const file=input.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const h=JSON.parse(e.target.result);
+      saveHistory(h); renderHistory();
+      alert('History imported successfully.');
+    }catch(ex){ alert('Invalid JSON file.'); }
+  };
+  r.readAsText(file);
+}
+
+// ── CALCULATE ────────────────────────────────────────────────────────────────
+function runCalc(){
+  const history=loadHistory();
+  // Store new consumption entries
+  VESSELS.forEach(v=>{
+    const d=parsedData[v]; if(!d||d.cylConsumed<=0) return;
+    if(!history[v]) history[v]={};
+    history[v][d.monthName]=d.cylConsumed;
+  });
+  saveHistory(history);
+
+  calcRes={};
+  VESSELS.forEach(v=>{
+    const d=parsedData[v];
+    const fr=parseFloat(document.getElementById('fr_'+v)?.value||DEFAULT_FR[v]);
+    const bn=parseInt(document.getElementById('bn_'+v)?.value||DEFAULT_BN[v]);
+    const eng=ENGINE[v];
+    const ncr=NCR_KW[eng];
+    const rob=d?d.cylUsable:null;
+    const ss=d?d.cylSS:0;
+    const sysRob=d?d.sysTotal:null;
+    const geRob=d?d.geTotal:null;
+
+    // Scenario 2
+    const dailyNCR = fr/1000 * ncr * 24 * 2 / SG;
+    const s2days = rob>0 ? rob/dailyNCR : null;
+
+    // Scenario 3
+    const s3mon = S3_MON[eng];
+    const s3daily = s3mon/30;
+    const s3days = rob>0 ? rob/s3daily : null;
+
+    // Scenario 1
+    const hist=history[v]||{};
+    const vals=Object.values(hist).filter(x=>x>0);
+    let s1avg=null, s1days=null;
+    if(vals.length>=2){
+      s1avg = vals.reduce((a,b)=>a+b,0)/vals.length/30;
+      s1days = rob>0 ? rob/s1avg : null;
+    }
+
+    calcRes[v]={fr,bn,eng,ncr,rob,ss,sysRob,geRob,dailyNCR,s2days,s3mon,s3daily,s3days,s1avg,s1days,histCount:vals.length};
+  });
+
+  renderResults(history);
+  document.getElementById('topMonth').textContent=cap(currentMonth)+' 2026';
+  goPage(3);
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+function cap(s){ return s?s.charAt(0)+s.slice(1).toLowerCase():''; }
+function fmt1(v){ return v!=null?v.toFixed(1):'—'; }
+function fmtN(v){ return v!=null?Math.round(v).toLocaleString():'—'; }
+function daysClass(d){
+  if(d==null) return 'val-muted';
+  if(d<90) return 'val-red';
+  if(d<180) return 'val-amber';
+  return 'val-green';
+}
+
+function renderResults(history){
+  // ROB
+  const rb=document.getElementById('robBody'); rb.innerHTML='';
+  VESSELS.forEach(v=>{
+    const r=calcRes[v]; const d=parsedData[v];
+    rb.innerHTML+=`<tr>
+      <td class="vessel-name">Minerva ${v}</td>
+      <td>${d?cap(d.monthName):'<span class="val-muted">no file</span>'}</td>
+      <td class="num">${d?d.cylTotal.toLocaleString():'—'}</td>
+      <td class="num">${r.ss>0?r.ss.toLocaleString():'—'}</td>
+      <td class="num" style="font-weight:600">${r.rob!=null?r.rob.toLocaleString():'—'}</td>
+      <td class="num">${r.sysRob!=null?r.sysRob.toLocaleString():'—'}</td>
+      <td class="num">${r.geRob!=null?r.geRob.toLocaleString():'—'}</td>
+    </tr>`;
+  });
+
+  // Scenario 1
+  const s1=document.getElementById('s1Body'); s1.innerHTML='';
+  VESSELS.forEach(v=>{
+    const r=calcRes[v];
+    const nd=r.histCount<2;
+    const dc=nd?'val-muted':daysClass(r.s1days);
+    s1.innerHTML+=`<tr>
+      <td class="vessel-name">Minerva ${v}</td>
+      <td class="num">${r.histCount}</td>
+      <td class="num">${r.s1avg!=null?Math.round(r.s1avg):'<span class="val-muted">—</span>'}</td>
+      <td class="num">${r.rob!=null?r.rob.toLocaleString():'—'}</td>
+      <td class="num ${dc}">${nd?'<span class="val-muted">No data</span>':Math.round(r.s1days)}</td>
+      <td class="num ${dc}">${nd?'<span class="val-muted">No data</span>':fmt1(r.s1days/30)}</td>
+    </tr>`;
+  });
+
+  // Scenario 2
+  const s2=document.getElementById('s2Body'); s2.innerHTML='';
+  VESSELS.forEach(v=>{
+    const r=calcRes[v];
+    const dc=daysClass(r.s2days);
+    s2.innerHTML+=`<tr>
+      <td class="vessel-name">Minerva ${v}</td>
+      <td class="num">${r.fr}</td>
+      <td class="num">${r.ncr.toLocaleString()}</td>
+      <td class="num">${Math.round(r.dailyNCR).toLocaleString()}</td>
+      <td class="num">${r.rob!=null?r.rob.toLocaleString():'—'}</td>
+      <td class="num ${dc}">${r.s2days!=null?Math.round(r.s2days):'—'}</td>
+      <td class="num ${dc}">${r.s2days!=null?fmt1(r.s2days/30):'—'}</td>
+    </tr>`;
+  });
+
+  // Scenario 3
+  const s3=document.getElementById('s3Body'); s3.innerHTML='';
+  VESSELS.forEach(v=>{
+    const r=calcRes[v];
+    const dc=daysClass(r.s3days);
+    s3.innerHTML+=`<tr>
+      <td class="vessel-name">Minerva ${v}</td>
+      <td class="num">${r.s3mon.toLocaleString()}</td>
+      <td class="num">${Math.round(r.s3daily).toLocaleString()}</td>
+      <td class="num">${r.rob!=null?r.rob.toLocaleString():'—'}</td>
+      <td class="num ${dc}">${r.s3days!=null?Math.round(r.s3days):'—'}</td>
+      <td class="num ${dc}">${r.s3days!=null?fmt1(r.s3days/30):'—'}</td>
+    </tr>`;
+  });
+
+  // Safety stock
+  const ss=document.getElementById('ssBody'); ss.innerHTML='';
+  VESSELS.forEach(v=>{
+    const r=calcRes[v];
+    ss.innerHTML+=`<tr>
+      <td class="vessel-name">Minerva ${v}</td>
+      <td class="num">${r.ss>0?r.ss.toLocaleString():'—'}</td>
+      <td style="color:var(--text-muted)">${r.ss>0?'Emergency/safety stock drums — excluded from all calculations':'No safety stock defined'}</td>
+    </tr>`;
+  });
+
+  renderHistory(history);
+}
+
+function renderHistory(history){
+  if(!history) history=loadHistory();
+  let html='<thead><tr><th>Vessel</th>';
+  MONTHS.forEach(m=>html+=`<th>${m.substring(0,3)}</th>`);
+  html+='<th>Avg/day (Lt)</th></tr></thead><tbody>';
+  VESSELS.forEach(v=>{
+    const hist=history[v]||{};
+    html+=`<tr><td>Minerva ${v}</td>`;
+    MONTHS.forEach(m=>{
+      const val=hist[m];
+      html+=val>0?`<td class="hist-val">${val.toLocaleString()}</td>`:`<td class="hist-empty">—</td>`;
+    });
+    const vals=Object.values(hist).filter(x=>x>0);
+    const avg=vals.length>0?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length/30):null;
+    html+=`<td class="hist-avg">${avg!=null?avg:'—'}</td></tr>`;
+  });
+  html+='</tbody>';
+  document.getElementById('histTable').innerHTML=html;
+}
+
+// ── EMAIL ─────────────────────────────────────────────────────────────────────
+function buildEmail(){
+  const r=calcRes;
+  const month=cap(currentMonth)||'[Month]';
+  const year=new Date().getFullYear();
+  let t='Dear All, good day,\n\n';
+  t+=`Please find attached Lub oil Inventory form V-E-30 for ${month} ${year}.\n\n`;
+  t+='Vessels are in line with following feed rate & BN settings:\n\n';
+  t+='Vessel                 Feed Rate (g/kWh)   BN\n';
+  t+='─'.repeat(50)+'\n';
+  VESSELS.forEach(v=>{ t+=`Minerva ${v.padEnd(15)} ${String(r[v].fr).padEnd(19)} ${r[v].bn}\n`; });
+
+  t+='\n\nFollowing tables present sufficiency of ME Cylinder oil ROB\nfor 3 different credible scenarios:\n';
+
+  const pad=(s,w)=>String(s??'').padEnd(w);
+  const rpad=(s,w)=>String(s??'').padStart(w);
+
+  t+='\n\nSCENARIO 1 — Actual (average consumption, past 12 months)\n';
+  t+='─'.repeat(56)+'\n';
+  t+=pad('Vessel',28)+rpad('Days',10)+rpad('Months',12)+'\n';
+  VESSELS.forEach(v=>{
+    const d=r[v];
+    const days=d.s1days!=null?String(Math.round(d.s1days)):'No Data';
+    const mths=d.s1days!=null?fmt1(d.s1days/30):'No Data';
+    t+=pad('Minerva '+v,28)+rpad(days,10)+rpad(mths,12)+'\n';
+  });
+
+  t+='\n\nSCENARIO 2 — Continuous operation at NCR with current feed rate\n';
+  t+='─'.repeat(56)+'\n';
+  t+=pad('Vessel',28)+rpad('Days',10)+rpad('Months',12)+'\n';
+  VESSELS.forEach(v=>{
+    const d=r[v];
+    const days=d.s2days!=null?String(Math.round(d.s2days)):'—';
+    const mths=d.s2days!=null?fmt1(d.s2days/30):'—';
+    t+=pad('Minerva '+v,28)+rpad(days,10)+rpad(mths,12)+'\n';
+  });
+
+  t+='\n\nSCENARIO 3 — Fixed assumption (DSME: 6,000 Lt/month · SHI: 9,000 Lt/month)\n';
+  t+='─'.repeat(56)+'\n';
+  t+=pad('Vessel',28)+rpad('Days',10)+rpad('Months',12)+'\n';
+  VESSELS.forEach(v=>{
+    const d=r[v];
+    const days=d.s3days!=null?String(Math.round(d.s3days)):'—';
+    const mths=d.s3days!=null?fmt1(d.s3days/30):'—';
+    t+=pad('Minerva '+v,28)+rpad(days,10)+rpad(mths,12)+'\n';
+  });
+
+  t+='\n\nNote: Safety stock is excluded from the above calculations.\n';
+  t+='\nSafety Stock quantities:\n';
+  VESSELS.forEach(v=>{ t+=`  Minerva ${v}: ${r[v].ss>0?r[v].ss.toLocaleString()+' Lt':'—'}\n`; });
+
+  t+='\n\nThank you,\nBest Regards\n\nNikos Sofianos\nAsst. Technical Superintendent | TE Department\nT: +30 210 8907353  |  M: +30 693 2450244\nn.sofianos@minervagas.com\n141-143 Vouliagmenis Ave. 166 73, Voula, Athens\nwww.minervagas.com';
+  document.getElementById('emailBox').textContent=t;
+}
+
+function copyEmail(btn){
+  navigator.clipboard.writeText(document.getElementById('emailBox').textContent).then(()=>{
+    btn.textContent='✓ Copied!';
+    setTimeout(()=>btn.textContent='📋 Copy to clipboard',2000);
+  });
+}
+
+// ── EXCEL EXPORT ──────────────────────────────────────────────────────────────
+function styleSheet(ws, headerStyle){
+  const range=XLSX.utils.decode_range(ws['!ref']||'A1');
+  for(let c=range.s.c;c<=range.e.c;c++){
+    const hCell=XLSX.utils.encode_cell({r:0,c});
+    if(ws[hCell]) ws[hCell].s=headerStyle;
+  }
+}
+function exportExcel(){
+  const wb=XLSX.utils.book_new();
+  const month=cap(currentMonth||'Month');
+  const hdr={font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'0A1628'}},alignment:{horizontal:'center'}};
+
+  // ROB summary
+  const robRows=[['Vessel','Month','CylOil total (Lt)','Safety stock (Lt)','Usable ROB (Lt)','System oil (Lt)','GE oil (Lt)']];
+  VESSELS.forEach(v=>{
+    const r=calcRes[v]; const d=parsedData[v];
+    robRows.push(['Minerva '+v, d?cap(d.monthName):'', d?d.cylTotal:'', r.ss||0, r.rob||'', r.sysRob||'', r.geRob||'']);
+  });
+  const ws0=XLSX.utils.aoa_to_sheet(robRows);
+  ws0['!cols']=[{wch:22},{wch:12},{wch:18},{wch:16},{wch:16},{wch:16},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,ws0,'ROB Summary');
+
+  // Feed rate
+  const frRows=[['Vessel','Feed rate (g/kWh)','BN','Engine type','NCR (kW)']];
+  VESSELS.forEach(v=>{ const r=calcRes[v]; frRows.push(['Minerva '+v,r.fr,r.bn,r.eng,r.ncr]); });
+  const ws1=XLSX.utils.aoa_to_sheet(frRows);
+  ws1['!cols']=[{wch:22},{wch:18},{wch:8},{wch:14},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws1,'Feed Rate & BN');
+
+  // Scenario 1
+  const s1rows=[['Vessel','History (months)','Avg daily consump. (Lt/day)','Usable ROB (Lt)','Days remaining','Months remaining']];
+  VESSELS.forEach(v=>{
+    const r=calcRes[v];
+    s1rows.push(['Minerva '+v, r.histCount, r.s1avg!=null?Math.round(r.s1avg):'No Data', r.rob||'', r.s1days!=null?Math.round(r.s1days):'No Data', r.s1days!=null?Math.round(r.s1days/30*10)/10:'No Data']);
+  });
+  const ws2=XLSX.utils.aoa_to_sheet(s1rows);
+  ws2['!cols']=[{wch:22},{wch:16},{wch:26},{wch:16},{wch:14},{wch:16}];
+  XLSX.utils.book_append_sheet(wb,ws2,'Scenario 1 - Actual');
+
+  // Scenario 2
+  const s2rows=[['Vessel','Feed rate (g/kWh)','NCR (kW)','Daily consump. (Lt)','Usable ROB (Lt)','Days remaining','Months remaining']];
+  VESSELS.forEach(v=>{
+    const r=calcRes[v];
+    s2rows.push(['Minerva '+v,r.fr,r.ncr,Math.round(r.dailyNCR),r.rob||'',r.s2days!=null?Math.round(r.s2days):'',r.s2days!=null?Math.round(r.s2days/30*10)/10:'']);
+  });
+  const ws3=XLSX.utils.aoa_to_sheet(s2rows);
+  ws3['!cols']=[{wch:22},{wch:16},{wch:10},{wch:20},{wch:16},{wch:14},{wch:16}];
+  XLSX.utils.book_append_sheet(wb,ws3,'Scenario 2 - NCR');
+
+  // Scenario 3
+  const s3rows=[['Vessel','Monthly alloc. (Lt)','Daily rate (Lt)','Usable ROB (Lt)','Days remaining','Months remaining']];
+  VESSELS.forEach(v=>{
+    const r=calcRes[v];
+    s3rows.push(['Minerva '+v,r.s3mon,Math.round(r.s3daily),r.rob||'',r.s3days!=null?Math.round(r.s3days):'',r.s3days!=null?Math.round(r.s3days/30*10)/10:'']);
+  });
+  const ws4=XLSX.utils.aoa_to_sheet(s3rows);
+  ws4['!cols']=[{wch:22},{wch:18},{wch:14},{wch:16},{wch:14},{wch:16}];
+  XLSX.utils.book_append_sheet(wb,ws4,'Scenario 3 - Fixed');
+
+  // Safety stock
+  const ssrows=[['Vessel','Safety stock (Lt)','Note']];
+  VESSELS.forEach(v=>{ const r=calcRes[v]; ssrows.push(['Minerva '+v, r.ss||'—', r.ss>0?'Emergency drums — excluded from calculations':'No safety stock']); });
+  const ws5=XLSX.utils.aoa_to_sheet(ssrows);
+  ws5['!cols']=[{wch:22},{wch:18},{wch:44}];
+  XLSX.utils.book_append_sheet(wb,ws5,'Safety Stock');
+
+  XLSX.writeFile(wb,`Minerva_Gas_LO_ROB_${month}_${new Date().getFullYear()}.xlsx`);
+}
+
+// ── MISC ──────────────────────────────────────────────────────────────────────
+function startOver(){
+  parsedData={}; calcRes={}; currentMonth='';
+  document.getElementById('fileChips').innerHTML='';
+  document.getElementById('parseMsg').className='msg';
+  document.getElementById('fileInput').value='';
+  document.getElementById('btn1').disabled=true;
+  document.getElementById('topMonth').textContent='';
+  goPage(1);
+}
+
+// Init page 2 table when first navigating to it
+const origGoPage=goPage;
+function goPage(n){
+  if(n===2) buildFRTable();
+  if(n===4) buildEmail();
+  origGoPage(n);
+}
+</script>
+</body>
+</html>
