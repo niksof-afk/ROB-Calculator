@@ -662,8 +662,10 @@ function saveROBHistory(h){ localStorage.setItem('mg_robhist',JSON.stringify(h))
 
 // Get last N sorted keys from a grade object
 function getLastNROB(gradeObj, n){
+  const MONTH_ORDER={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
+  const toNum=k=>{ const yr=parseInt(k.slice(-4)); const mo=MONTH_ORDER[k.slice(0,3)]||0; return yr*100+mo; };
   const entries=Object.entries(gradeObj).filter(([k,v])=>v>0);
-  entries.sort((a,b)=>a[0].localeCompare(b[0]));
+  entries.sort((a,b)=>toNum(a[0])-toNum(b[0]));
   return entries.slice(-n);
 }
 
@@ -802,9 +804,10 @@ function makeHistKey(monthName, yearHint){
 }
 // Get last N months of values sorted chronologically
 function getLastNMonthValues(hist, n){
+  const MONTH_ORDER={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
+  const toNum=k=>{ const yr=parseInt(k.slice(-4)); const mo=MONTH_ORDER[k.slice(0,3)]||0; return yr*100+mo; };
   const entries=Object.entries(hist).filter(([k,v])=>v>0);
-  // Sort by key (e.g. APR2026) — year suffix sorts correctly
-  entries.sort((a,b)=>a[0].localeCompare(b[0]));
+  entries.sort((a,b)=>toNum(a[0])-toNum(b[0]));
   return entries.slice(-n).map(e=>e[1]);
 }
 
@@ -960,9 +963,11 @@ function renderResults(history){
 function renderHistory(history){
   if(!history) history=loadHistory();
   // Collect all unique keys across all vessels, sorted
+  const MONTH_ORDER={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
+  const toNum=k=>{ const yr=parseInt(k.slice(-4)); const mo=MONTH_ORDER[k.slice(0,3)]||0; return yr*100+mo; };
   const allKeys=new Set();
   VESSELS.forEach(v=>{ Object.keys(history[v]||{}).forEach(k=>allKeys.add(k)); });
-  const sortedKeys=Array.from(allKeys).sort((a,b)=>a.localeCompare(b));
+  const sortedKeys=Array.from(allKeys).sort((a,b)=>toNum(a)-toNum(b));
 
   let html='<thead><tr><th>Vessel</th>';
   sortedKeys.forEach(k=>html+=`<th style="font-size:11px;text-align:right">${k}</th>`);
