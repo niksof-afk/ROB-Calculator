@@ -491,9 +491,6 @@ function detectVessel(name){
   return null;
 }
 function findLatestMonthCol(ws){
-  // Find all month header columns first
-  // Structure: APRIL header is in col N, ROB END OF APR is also col N (row 2 label),
-  // CONSUMED WITHIN APR is col N+1
   const monthCols=[];
   for(let c=1;c<=48;c++){
     const cell=ws[XLSX.utils.encode_cell({r:0,c})];
@@ -503,21 +500,26 @@ function findLatestMonthCol(ws){
     if(mi>-1) monthCols.push({monthIdx:mi, monthName:MONTHS[mi], col:c});
   }
   if(!monthCols.length) return null;
-  // Work backwards — find last month with actual ROB data in that column
-  for(let i=monthCols.length-1;i>=0;i--){
+
+  // Find first month with data in row 11, then track consecutive run from there
+  let lastGood=null;
+  let inRun=false;
+  for(let i=0;i<monthCols.length;i++){
     const {monthIdx,monthName,col}=monthCols[i];
-    const robCol=col; // ROB is at same column as header
-    const conCol=col+1; // CONSUMED is header+1
-    let hasData=false;
-    for(let r=10;r<=19;r++){
-      const cell=ws[XLSX.utils.encode_cell({r,c:robCol-1})];
-      if(cell && cell.v && cell.v>0){ hasData=true; break; }
+    const cell=ws[XLSX.utils.encode_cell({r:10,c:col-1})];
+    const val=cell?cell.v:null;
+    const hasData=typeof val==='number' && val>0;
+    if(hasData){
+      inRun=true;
+      lastGood={monthIdx,monthName,robCol:col,conCol:col+1};
+    } else if(inRun){
+      break; // was in a run, hit a zero — stop here
     }
-    if(hasData) return {monthIdx, monthName, robCol, conCol};
+    // if !inRun && !hasData — skip leading zeros (vessel joined mid-year)
   }
-  // Fallback
+  if(lastGood) return lastGood;
   const first=monthCols[0];
-  return {monthIdx:first.monthIdx, monthName:first.monthName, robCol:first.col, conCol:first.col+1};
+  return {monthIdx:first.monthIdx,monthName:first.monthName,robCol:first.col,conCol:first.col+1};
 }
 function getCell(ws,r,c){ const a=XLSX.utils.encode_cell({r,c}); return ws[a]?ws[a].v:null; }
 function extractData(wb, vessel){
