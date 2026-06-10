@@ -296,6 +296,16 @@
           <tbody id="frBody"></tbody>
         </table>
       </div>
+      <div class="card">
+        <div class="card-title">ROB values — override if needed</div>
+        <div class="card-sub">Values extracted automatically from the uploaded forms. Edit any cell if you need to correct a misread value before calculating.</div>
+        <table class="fr-table">
+          <thead><tr>
+            <th>Vessel</th><th>Cylinder oil usable (Lt)</th><th>Safety stock (Lt)</th><th>System oil (Lt)</th><th>GE oil (Lt)</th><th>Cyl consumed (Lt)</th>
+          </tr></thead>
+          <tbody id="robOverrideBody"></tbody>
+        </table>
+      </div>
       <div class="btn-row space">
         <button class="btn" onclick="navigateTo(1)">← Back</button>
         <button class="btn btn-primary" onclick="runCalc()">Calculate →</button>
@@ -627,7 +637,25 @@ function buildFRTable(){
       <td class="num">${(NCR_KW[eng]||0).toLocaleString()}</td>`;
     tb.appendChild(tr);
   });
+  // Build ROB override table
+  const rb=document.getElementById('robOverrideBody'); rb.innerHTML='';
+  VESSELS.forEach(v=>{
+    const d=parsedData[v];
+    const noFile=!d;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td class="vessel-name">${v}${noFile?` <span style="font-size:11px;color:var(--text-muted)">(no file)</span>`:''}
+        ${d?`<br><span style="font-size:11px;color:var(--text-muted)">${cap(d.monthName)}</span>`:''}
+      </td>
+      <td><input type="number" id="ov_cyl_${v}" value="${d?d.cylUsable:''}" step="1" min="0" ${noFile?'placeholder="—"':''}></td>
+      <td><input type="number" id="ov_ss_${v}"  value="${d?d.cylSS:''}"   step="1" min="0" ${noFile?'placeholder="—"':''}></td>
+      <td><input type="number" id="ov_sys_${v}" value="${d?d.sysTotal:''}" step="1" min="0" ${noFile?'placeholder="—"':''}></td>
+      <td><input type="number" id="ov_ge_${v}"  value="${d?d.geTotal:''}"  step="1" min="0" ${noFile?'placeholder="—"':''}></td>
+      <td><input type="number" id="ov_con_${v}" value="${d?d.cylConsumed:''}" step="1" min="0" ${noFile?'placeholder="—"':''}></td>`;
+    rb.appendChild(tr);
+  });
 }
+
 
 // ── PRELOADED HISTORY (Dec 2024 – Apr 2026) ───────────────────────────────────
 const PRELOADED_HISTORY = {"Psara":{"DEC2024":3768,"JAN2025":5734,"FEB2025":1771,"MAR2025":5019,"APR2025":4481,"MAY2025":4589,"JUN2025":4944,"JUL2025":4296,"AUG2025":4898,"SEP2025":4547,"OCT2025":4606,"NOV2025":2797,"DEC2025":2254,"JAN2026":6501,"FEB2026":3353,"MAR2026":3225,"APR2026":4638},"Limnos":{"DEC2024":5577,"JAN2025":6460,"FEB2025":7000,"MAR2025":7600,"APR2025":6130,"MAY2025":4822,"JUN2025":3662,"JUL2025":7186,"AUG2025":6510,"SEP2025":6952,"OCT2025":5808,"NOV2025":10512,"DEC2025":6136,"JAN2026":6225,"FEB2026":3426,"MAR2026":4161,"APR2026":7971},"Kalymnos":{"DEC2024":6500,"JAN2025":10730,"FEB2025":7970,"MAR2025":8250,"APR2025":6500,"MAY2025":10500,"JUN2025":9760,"JUL2025":12740,"AUG2025":14750,"SEP2025":7700,"OCT2025":3700,"NOV2025":8500,"DEC2025":9100,"JAN2026":5800,"FEB2026":8242,"MAR2026":8242,"APR2026":9300},"Chios":{"DEC2024":12900,"JAN2025":12300,"FEB2025":4263,"MAR2025":10111,"APR2025":12604,"MAY2025":11904,"JUN2025":11696,"JUL2025":8400,"AUG2025":6000,"SEP2025":10200,"OCT2025":11600,"NOV2025":9400,"DEC2025":13800,"JAN2026":11300,"FEB2026":3200,"MAR2026":4600,"APR2026":11927},"Amorgos":{"DEC2024":9960,"JAN2025":11270,"FEB2025":10074,"MAR2025":11315,"APR2025":10550,"MAY2025":6010,"JUN2025":3020,"JUL2025":12120,"AUG2025":10600,"SEP2025":10000,"OCT2025":14500,"NOV2025":15490,"DEC2025":13810,"JAN2026":11300,"FEB2026":4900,"MAR2026":6200,"APR2026":8000},"Eleonora":{"MAR2026":8360,"APR2026":10540},"Roxanne":{}};
@@ -816,23 +844,30 @@ function runCalc(){
   const history=loadHistory();
   const robHistory=loadROBHistory();
   const yearHint=new Date().getFullYear();
-  // Store new consumption entries
-  VESSELS.forEach(v=>{
-    const d=parsedData[v]; if(!d||d.cylConsumed<=0) return;
-    if(!history[v]) history[v]={};
-    const key=makeHistKey(d.monthName, yearHint);
-    history[v][key]=d.cylConsumed;
-  });
-  saveHistory(history);
-  // Store new ROB entries for all 3 grades
+
+  // Read override values (user-editable on step 2)
+  const getOv=(prefix,v,fallback)=>{
+    const el=document.getElementById(`${prefix}_${v}`);
+    if(!el||el.value==='') return fallback;
+    const n=parseFloat(el.value);
+    return isNaN(n)?fallback:n;
+  };
+
+  // Store consumption and ROB history using override values
   VESSELS.forEach(v=>{
     const d=parsedData[v]; if(!d) return;
     const key=makeHistKey(d.monthName, yearHint);
+    const con=getOv('ov_con',v,d.cylConsumed);
+    if(con>0){ if(!history[v]) history[v]={}; history[v][key]=con; }
+    const cyl=getOv('ov_cyl',v,d.cylUsable);
+    const sys=getOv('ov_sys',v,d.sysTotal);
+    const ge=getOv('ov_ge',v,d.geTotal);
     if(!robHistory[v]) robHistory[v]={cyl:{},sys:{},aux:{}};
-    if(d.cylUsable>0) robHistory[v].cyl[key]=d.cylUsable;
-    if(d.sysTotal>0) robHistory[v].sys[key]=d.sysTotal;
-    if(d.geTotal>0) robHistory[v].aux[key]=d.geTotal;
+    if(cyl>0) robHistory[v].cyl[key]=cyl;
+    if(sys>0) robHistory[v].sys[key]=sys;
+    if(ge>0) robHistory[v].aux[key]=ge;
   });
+  saveHistory(history);
   saveROBHistory(robHistory);
 
   calcRes={};
@@ -842,10 +877,11 @@ function runCalc(){
     const bn=parseInt(document.getElementById('bn_'+v)?.value||DEFAULT_BN[v]);
     const eng=ENGINE[v];
     const ncr=NCR_KW[eng];
-    const rob=d?d.cylUsable:null;
-    const ss=d?d.cylSS:0;
-    const sysRob=d?d.sysTotal:null;
-    const geRob=d?d.geTotal:null;
+    // Use override values if set, otherwise fall back to parsed data
+    const rob=getOv('ov_cyl',v,d?d.cylUsable:null);
+    const ss=getOv('ov_ss',v,d?d.cylSS:0);
+    const sysRob=getOv('ov_sys',v,d?d.sysTotal:null);
+    const geRob=getOv('ov_ge',v,d?d.geTotal:null);
 
     // Scenario 2
     const dailyNCR = fr/1000 * ncr * 24 * 2 / SG;
@@ -888,14 +924,15 @@ function renderResults(history){
   const rb=document.getElementById('robBody'); rb.innerHTML='';
   VESSELS.forEach(v=>{
     const r=calcRes[v]; const d=parsedData[v];
+    const cylTotal=d?(r.rob+(r.ss||0)):null;
     rb.innerHTML+=`<tr>
       <td class="vessel-name">Minerva ${v}</td>
       <td>${d?cap(d.monthName):'<span class="val-muted">no file</span>'}</td>
-      <td class="num">${d?d.cylTotal.toLocaleString():'—'}</td>
+      <td class="num">${cylTotal!=null?Math.round(cylTotal).toLocaleString():'—'}</td>
       <td class="num">${r.ss>0?r.ss.toLocaleString():'—'}</td>
-      <td class="num" style="font-weight:600">${r.rob!=null?r.rob.toLocaleString():'—'}</td>
-      <td class="num">${r.sysRob!=null?r.sysRob.toLocaleString():'—'}</td>
-      <td class="num">${r.geRob!=null?r.geRob.toLocaleString():'—'}</td>
+      <td class="num" style="font-weight:600">${r.rob!=null?Math.round(r.rob).toLocaleString():'—'}</td>
+      <td class="num">${r.sysRob!=null?Math.round(r.sysRob).toLocaleString():'—'}</td>
+      <td class="num">${r.geRob!=null?Math.round(r.geRob).toLocaleString():'—'}</td>
     </tr>`;
   });
 
