@@ -514,18 +514,18 @@ function findLatestMonthCol(ws){
   for(const month of MONTHS){
     const robCol=robColMap[month]; if(!robCol) continue;
     const conCol=robCol+1;
-    // Check consumption
+    // Check consumption (col=robCol+1) — only count numeric values > 0
     let hasCon=false;
     for(let r=10;r<=18;r++){
       const cell=ws[XLSX.utils.encode_cell({r,c:conCol-1})];
-      if(cell && typeof cell.v==='number' && cell.v>0){ hasCon=true; break; }
+      if(cell && cell.t==='n' && typeof cell.v==='number' && cell.v>0){ hasCon=true; break; }
     }
     if(hasCon) lastByConsumption={monthName:month,robCol,conCol};
-    // Check ROB data
+    // Check ROB data — only count numeric values > 0
     let hasROB=false;
     for(let r=10;r<=18;r++){
       const cell=ws[XLSX.utils.encode_cell({r,c:robCol-1})];
-      if(cell && typeof cell.v==='number' && cell.v>0){ hasROB=true; break; }
+      if(cell && cell.t==='n' && typeof cell.v==='number' && cell.v>0){ hasROB=true; break; }
     }
     if(hasROB) lastByROB={monthName:month,robCol,conCol};
   }
