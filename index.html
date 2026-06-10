@@ -745,7 +745,6 @@ function fmtN(v){ return v!=null?Math.round(v).toLocaleString():'—'; }
 function daysClass(d){
   if(d==null) return 'val-muted';
   if(d<60) return 'val-red';
-  if(d<180) return 'val-amber';
   return 'val-green';
 }
 
@@ -862,7 +861,7 @@ function buildEmail(){
 
   const dayColor=(d)=>{
     if(d==null) return '#6b7a99';
-    if(d<60) return red; if(d<180) return amber; return green;
+    if(d<60) return red; return green;
   };
   const dayBg=(d)=>{ return '#ffffff'; };
 
@@ -897,7 +896,7 @@ function buildEmail(){
   h+=`</tbody></table>`;
 
   h+=`<p style="margin:0 0 20px">Following tables present the sufficiency of ME Cylinder oil ROB following <strong>3 credible scenarios</strong>:</p>`;
-  h+=`<p style="margin:0 0 8px;font-size:12px;color:#6b7a99"><span style="color:${green};font-weight:600">●</span> &gt;180 days &nbsp;&nbsp;<span style="color:${amber};font-weight:600">●</span> 60–180 days &nbsp;&nbsp;<span style="color:${red};font-weight:600">●</span> &lt;60 days</p>`;
+  h+=`<p style="margin:0 0 8px;font-size:12px;color:#6b7a99"><span style="color:${green};font-weight:600">●</span> &gt;60 days &nbsp;&nbsp;<span style="color:${red};font-weight:600">●</span> &lt;60 days</p>`;
 
   // Scenario table builder
   const scenTable=(title,note,rows)=>{
@@ -995,7 +994,6 @@ function applyExcelStyles(ws, dataRows, daysColIdx){
           const d=ws[addr].v;
           let fg;
           if(d<60) fg=red;
-          else if(d<180) fg=amber;
           else fg=green;
           ws[addr].s={...ws[addr].s,font:{bold:true,color:{rgb:fg}}};
         }
