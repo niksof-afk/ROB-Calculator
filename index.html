@@ -491,14 +491,11 @@ function detectVessel(name){
   return null;
 }
 function findLatestMonthCol(ws){
-  // Strategy: scan row 2 for 'ROB END OF XXX' labels to map month->robCol
-  // Then find the last month where CONSUMED col (robCol+1) has any non-zero value in key rows
-  // Fallback for new vessels (no consumption yet): use last month with ROB data in robCol
   const MONTH_ABBR={JAN:'JANUARY',FEB:'FEBRUARY',MAR:'MARCH',APR:'APRIL',MAY:'MAY',
     JUN:'JUNE',JUL:'JULY',AUG:'AUGUST',SEP:'SEPTEMBER',OCT:'OCTOBER',NOV:'NOVEMBER',DEC:'DECEMBER'};
   const robColMap={};
   for(let c=1;c<=48;c++){
-    const cell=ws[XLSX.utils.encode_cell({r:1,c:c-1})]; // row 2, 0-indexed
+    const cell=ws[XLSX.utils.encode_cell({r:1,c:c-1})];
     if(!cell) continue;
     const v=(cell.v||'').toString().toUpperCase();
     if(v.indexOf('ROB END OF')===-1) continue;
@@ -508,20 +505,23 @@ function findLatestMonthCol(ws){
   }
   if(!Object.keys(robColMap).length) return null;
 
-  // Check rows 11-18 for consumption (col=robCol+1) — means month actually occurred
+  // Cap at current calendar month to avoid future months with formula stubs
+  const curMonthIdx=new Date().getMonth(); // 0=Jan
+
   let lastByConsumption=null;
   let lastByROB=null;
-  for(const month of MONTHS){
-    const robCol=robColMap[month]; if(!robCol) continue;
+  for(let mi=0;mi<MONTHS.length;mi++){
+    const month=MONTHS[mi];
+    if(!robColMap[month]) continue;
+    if(mi>curMonthIdx) break; // stop at future months
+    const robCol=robColMap[month];
     const conCol=robCol+1;
-    // Check consumption (col=robCol+1) — only count numeric values > 0
     let hasCon=false;
     for(let r=10;r<=18;r++){
       const cell=ws[XLSX.utils.encode_cell({r,c:conCol-1})];
       if(cell && cell.t==='n' && typeof cell.v==='number' && cell.v>0){ hasCon=true; break; }
     }
     if(hasCon) lastByConsumption={monthName:month,robCol,conCol};
-    // Check ROB data — only count numeric values > 0
     let hasROB=false;
     for(let r=10;r<=18;r++){
       const cell=ws[XLSX.utils.encode_cell({r,c:robCol-1})];
@@ -529,7 +529,6 @@ function findLatestMonthCol(ws){
     }
     if(hasROB) lastByROB={monthName:month,robCol,conCol};
   }
-  // Prefer consumption-based; fall back to ROB-based for new vessels
   return lastByConsumption || lastByROB || null;
 }
 function getCell(ws,r,c){ const a=XLSX.utils.encode_cell({r,c}); return ws[a]?ws[a].v:null; }
