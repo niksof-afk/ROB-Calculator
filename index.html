@@ -625,11 +625,23 @@ function loadHistory(){
   try{
     const stored=localStorage.getItem('mg_cylhist');
     if(!stored){
-      // First run — seed with preloaded history
       localStorage.setItem('mg_cylhist',JSON.stringify(PRELOADED_HISTORY));
       return JSON.parse(JSON.stringify(PRELOADED_HISTORY));
     }
-    return JSON.parse(stored);
+    const existing=JSON.parse(stored);
+    // Always merge preloaded data — preloaded keys are authoritative baselines
+    // but existing keys (new months added by user) take priority
+    let merged=JSON.parse(JSON.stringify(PRELOADED_HISTORY));
+    for(const v of VESSELS){
+      if(!existing[v]) continue;
+      if(!merged[v]) merged[v]={};
+      for(const [k,val] of Object.entries(existing[v])){
+        merged[v][k]=val; // user entries override preloaded
+      }
+    }
+    // Save merged back so it's clean going forward
+    localStorage.setItem('mg_cylhist',JSON.stringify(merged));
+    return merged;
   }catch(e){ return JSON.parse(JSON.stringify(PRELOADED_HISTORY)); }
 }
 function saveHistory(h){ localStorage.setItem('mg_cylhist',JSON.stringify(h)); }
