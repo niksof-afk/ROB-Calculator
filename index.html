@@ -393,10 +393,16 @@
       <div class="card">
         <div class="gold-line"></div>
         <div class="card-title">Email body</div>
-        <div class="card-sub">Copy and paste directly into Outlook.</div>
-        <div class="email-box" id="emailBox"></div>
+        <div class="card-sub">Preview below. Click "Copy HTML" then paste into Outlook with <strong>Ctrl+V</strong> — tables will appear formatted.</div>
+        <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:.75rem">
+          <div style="background:var(--bg);padding:6px 12px;font-size:12px;color:var(--text-muted);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+            <span>HTML Preview</span>
+            <span style="font-size:11px">Paste directly into Outlook — formatting is preserved</span>
+          </div>
+          <div id="emailBox" style="padding:1.25rem;max-height:480px;overflow-y:auto;background:white;color:#1a2540"></div>
+        </div>
         <div class="btn-row right">
-          <button class="btn" onclick="copyEmail(this)">📋 Copy to clipboard</button>
+          <button class="btn" onclick="copyEmail(this)">📋 Copy HTML to clipboard</button>
         </div>
       </div>
       <div class="card">
@@ -850,75 +856,168 @@ function buildEmail(){
   const r=calcRes;
   const month=cap(currentMonth)||'[Month]';
   const year=new Date().getFullYear();
-  let t='Dear All, good day,\n\n';
-  t+=`Please find attached Lub oil Inventory form V-E-30 for ${month} ${year}.\n\n`;
-  t+='Vessels are in line with following feed rate & BN settings:\n\n';
-  t+='Vessel                 Feed Rate (g/kWh)   BN\n';
-  t+='─'.repeat(50)+'\n';
-  VESSELS.forEach(v=>{ t+=`Minerva ${v.padEnd(15)} ${String(r[v].fr).padEnd(19)} ${r[v].bn}\n`; });
 
-  t+='\n\nFollowing tables present sufficiency of ME Cylinder oil ROB\nfor 3 different credible scenarios:\n';
+  const navy='#0a1628'; const gold='#c8a84b'; const green='#1a9e6a'; const amber='#b07d12'; const red='#c0392b';
+  const greenBg='#e6f7f1'; const amberBg='#fdf3dc'; const redBg='#fdecea'; const grayBg='#f5f7fa';
 
-  const pad=(s,w)=>String(s??'').padEnd(w);
-  const rpad=(s,w)=>String(s??'').padStart(w);
+  const dayColor=(d)=>{
+    if(d==null) return '#6b7a99';
+    if(d<90) return red; if(d<180) return amber; return green;
+  };
+  const dayBg=(d)=>{
+    if(d==null) return '#ffffff'; if(d<90) return redBg; if(d<180) return amberBg; return greenBg;
+  };
 
-  t+='\n\nSCENARIO 1 — Actual (average consumption, past 12 months)\n';
-  t+='─'.repeat(56)+'\n';
-  t+=pad('Vessel',28)+rpad('Days',10)+rpad('Months',12)+'\n';
-  VESSELS.forEach(v=>{
-    const d=r[v];
-    const days=d.s1days!=null?String(Math.round(d.s1days)):'No Data';
-    const mths=d.s1days!=null?fmt1(d.s1days/30):'No Data';
-    t+=pad('Minerva '+v,28)+rpad(days,10)+rpad(mths,12)+'\n';
+  const thStyle=`style="background:${navy};color:white;padding:8px 12px;text-align:left;font-size:13px;font-weight:600;border:none"`;
+  const thRight=`style="background:${navy};color:white;padding:8px 12px;text-align:right;font-size:13px;font-weight:600;border:none"`;
+  const tdStyle=`style="padding:7px 12px;font-size:13px;border-bottom:1px solid #e8edf5;color:#1a2540"`;
+  const tdRight=`style="padding:7px 12px;font-size:13px;border-bottom:1px solid #e8edf5;text-align:right;color:#1a2540"`;
+  const tableStyle=`style="border-collapse:collapse;width:100%;margin-bottom:20px;font-family:Arial,sans-serif"`;
+
+  let h=`<div style="font-family:Arial,sans-serif;font-size:14px;color:#1a2540;max-width:720px">`;
+
+  // Greeting
+  h+=`<p style="margin:0 0 12px">Dear All, good day,</p>`;
+  h+=`<p style="margin:0 0 12px">Please find attached Lub oil Inventory form <strong>V-E-30</strong> for <strong>${month} ${year}</strong>.</p>`;
+  h+=`<p style="margin:0 0 20px">Vessels are in line with the following feed rate &amp; BN settings:</p>`;
+
+  // Feed rate table
+  h+=`<p style="margin:0 0 8px;font-weight:600;color:${navy};font-size:13px;text-transform:uppercase;letter-spacing:.5px">Feed Rate &amp; BN Settings</p>`;
+  h+=`<table ${tableStyle}><thead><tr>`;
+  h+=`<th ${thStyle}>Vessel</th><th ${thRight}>Feed Rate (g/kWh)</th><th ${thRight}>BN</th><th ${thRight}>Engine</th><th ${thRight}>NCR (kW)</th>`;
+  h+=`</tr></thead><tbody>`;
+  VESSELS.forEach((v,i)=>{
+    const bg=i%2===0?'#ffffff':grayBg;
+    h+=`<tr style="background:${bg}">`;
+    h+=`<td ${tdStyle}><strong>Minerva ${v}</strong></td>`;
+    h+=`<td ${tdRight}>${r[v].fr}</td>`;
+    h+=`<td ${tdRight}>${r[v].bn}</td>`;
+    h+=`<td ${tdRight} style="padding:7px 12px;font-size:12px;border-bottom:1px solid #e8edf5;text-align:right"><span style="background:${r[v].eng==='DSME'?'#e8f0fe':'#fdf3dc'};color:${r[v].eng==='DSME'?'#1a56db':'#92610a'};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${r[v].eng.replace('2','')}</span></td>`;
+    h+=`<td ${tdRight}>${r[v].ncr.toLocaleString()}</td>`;
+    h+=`</tr>`;
   });
+  h+=`</tbody></table>`;
 
-  t+='\n\nSCENARIO 2 — Continuous operation at NCR with current feed rate\n';
-  t+='─'.repeat(56)+'\n';
-  t+=pad('Vessel',28)+rpad('Days',10)+rpad('Months',12)+'\n';
-  VESSELS.forEach(v=>{
-    const d=r[v];
-    const days=d.s2days!=null?String(Math.round(d.s2days)):'—';
-    const mths=d.s2days!=null?fmt1(d.s2days/30):'—';
-    t+=pad('Minerva '+v,28)+rpad(days,10)+rpad(mths,12)+'\n';
-  });
+  h+=`<p style="margin:0 0 20px">Following tables present the sufficiency of ME Cylinder oil ROB following <strong>3 credible scenarios</strong>:</p>`;
+  h+=`<p style="margin:0 0 8px;font-size:12px;color:#6b7a99"><span style="display:inline-block;width:12px;height:12px;background:${greenBg};border:1px solid ${green};border-radius:2px;margin-right:5px;vertical-align:-1px"></span>&gt;180 days &nbsp;&nbsp;<span style="display:inline-block;width:12px;height:12px;background:${amberBg};border:1px solid ${amber};border-radius:2px;margin-right:5px;vertical-align:-1px"></span>90–180 days &nbsp;&nbsp;<span style="display:inline-block;width:12px;height:12px;background:${redBg};border:1px solid ${red};border-radius:2px;margin-right:5px;vertical-align:-1px"></span>&lt;90 days</p>`;
 
-  t+='\n\nSCENARIO 3 — Fixed assumption (DSME: 6,000 Lt/month · SHI: 9,000 Lt/month)\n';
-  t+='─'.repeat(56)+'\n';
-  t+=pad('Vessel',28)+rpad('Days',10)+rpad('Months',12)+'\n';
-  VESSELS.forEach(v=>{
-    const d=r[v];
-    const days=d.s3days!=null?String(Math.round(d.s3days)):'—';
-    const mths=d.s3days!=null?fmt1(d.s3days/30):'—';
-    t+=pad('Minerva '+v,28)+rpad(days,10)+rpad(mths,12)+'\n';
-  });
+  // Scenario table builder
+  const scenTable=(title,note,rows)=>{
+    let s=`<p style="margin:20px 0 8px;font-weight:600;color:${navy};font-size:13px;text-transform:uppercase;letter-spacing:.5px">${title}</p>`;
+    if(note) s+=`<p style="margin:0 0 8px;font-size:12px;color:#6b7a99">${note}</p>`;
+    s+=`<table ${tableStyle}><thead><tr>`;
+    s+=`<th ${thStyle}>Vessel</th><th ${thRight}>Operating Days</th><th ${thRight}>Operating Months</th>`;
+    s+=`</tr></thead><tbody>`;
+    rows.forEach(([v,days,mths],i)=>{
+      const bg=i%2===0?'#ffffff':grayBg;
+      const hasData=days!=null;
+      s+=`<tr style="background:${hasData?dayBg(days):bg}">`;
+      s+=`<td ${tdStyle}><strong>Minerva ${v}</strong></td>`;
+      s+=`<td style="padding:7px 12px;font-size:13px;border-bottom:1px solid #e8edf5;text-align:right;font-weight:600;color:${dayColor(days)}">${hasData?Math.round(days):'No Data'}</td>`;
+      s+=`<td style="padding:7px 12px;font-size:13px;border-bottom:1px solid #e8edf5;text-align:right;font-weight:600;color:${dayColor(days)}">${hasData?fmt1(mths):'No Data'}</td>`;
+      s+=`</tr>`;
+    });
+    s+=`</tbody></table>`;
+    return s;
+  };
 
-  t+='\n\nNote: Safety stock is excluded from the above calculations.\n';
-  t+='\nSafety Stock quantities:\n';
-  VESSELS.forEach(v=>{ t+=`  Minerva ${v}: ${r[v].ss>0?r[v].ss.toLocaleString()+' Lt':'—'}\n`; });
+  h+=scenTable('Scenario 1 — Actual (12-month average consumption)',
+    'Based on average daily consumption from the past 12 months operating profile.',
+    VESSELS.map(v=>[v, r[v].s1days, r[v].s1days!=null?r[v].s1days/30:null]));
 
-  t+='\n\nThank you,\nBest Regards\n\nNikos Sofianos\nAsst. Technical Superintendent | TE Department\nT: +30 210 8907353  |  M: +30 693 2450244\nn.sofianos@minervagas.com\n141-143 Vouliagmenis Ave. 166 73, Voula, Athens\nwww.minervagas.com';
-  document.getElementById('emailBox').textContent=t;
+  h+=scenTable('Scenario 2 — Continuous operation at NCR with current feed rate',null,
+    VESSELS.map(v=>[v, r[v].s2days, r[v].s2days!=null?r[v].s2days/30:null]));
+
+  h+=scenTable('Scenario 3 — Fixed monthly assumption',
+    `DSME: 6,000 Lt/month &nbsp;|&nbsp; SHI: 9,000 Lt/month`,
+    VESSELS.map(v=>[v, r[v].s3days, r[v].s3days!=null?r[v].s3days/30:null]));
+
+  // Safety stock note
+  const ssVessels=VESSELS.filter(v=>r[v].ss>0);
+  if(ssVessels.length>0){
+    h+=`<p style="margin:16px 0 8px;font-size:13px;color:#6b7a99"><em>Note: Safety stock is excluded from all calculations above.</em></p>`;
+    h+=`<table ${tableStyle} style="border-collapse:collapse;width:auto;margin-bottom:20px;font-family:Arial,sans-serif"><thead><tr>`;
+    h+=`<th ${thStyle}>Vessel</th><th ${thRight}>Safety Stock (Lt)</th></tr></thead><tbody>`;
+    VESSELS.forEach((v,i)=>{
+      const bg=i%2===0?'#ffffff':grayBg;
+      h+=`<tr style="background:${bg}"><td ${tdStyle}>Minerva ${v}</td><td ${tdRight}>${r[v].ss>0?r[v].ss.toLocaleString():'—'}</td></tr>`;
+    });
+    h+=`</tbody></table>`;
+  }
+
+  // Signature
+  h+=`<p style="margin:24px 0 4px">Thank you,<br>Best Regards</p>`;
+  h+=`<p style="margin:0;font-weight:600;color:${navy}">Nikos Sofianos</p>`;
+  h+=`<p style="margin:0;font-size:13px;color:#6b7a99">Asst. Technical Superintendent | TE Department</p>`;
+  h+=`<p style="margin:0;font-size:13px;color:#6b7a99">T: +30 210 8907353 &nbsp;|&nbsp; M: +30 693 2450244</p>`;
+  h+=`<p style="margin:0;font-size:13px"><a href="mailto:n.sofianos@minervagas.com" style="color:${navy}">n.sofianos@minervagas.com</a></p>`;
+  h+=`<p style="margin:0;font-size:13px;color:#6b7a99">141-143 Vouliagmenis Ave. 166 73, Voula, Athens</p>`;
+  h+=`<p style="margin:0;font-size:13px"><a href="http://www.minervagas.com" style="color:${navy}">www.minervagas.com</a></p>`;
+  h+=`</div>`;
+
+  document.getElementById('emailBox').innerHTML=h;
+  // Store HTML for clipboard
+  document.getElementById('emailBox').dataset.html=h;
 }
 
 function copyEmail(btn){
-  navigator.clipboard.writeText(document.getElementById('emailBox').textContent).then(()=>{
-    btn.textContent='✓ Copied!';
-    setTimeout(()=>btn.textContent='📋 Copy to clipboard',2000);
-  });
+  const html=document.getElementById('emailBox').dataset.html||document.getElementById('emailBox').innerHTML;
+  // Use ClipboardItem to copy rich HTML
+  try{
+    const blob=new Blob([html],{type:'text/html'});
+    const item=new ClipboardItem({'text/html':blob});
+    navigator.clipboard.write([item]).then(()=>{
+      btn.textContent='✓ Copied!';
+      setTimeout(()=>btn.textContent='📋 Copy HTML to clipboard',2000);
+    });
+  }catch(e){
+    // Fallback: copy plain text
+    navigator.clipboard.writeText(document.getElementById('emailBox').innerText).then(()=>{
+      btn.textContent='✓ Copied (plain text)';
+      setTimeout(()=>btn.textContent='📋 Copy HTML to clipboard',2000);
+    });
+  }
 }
 
 // ── EXCEL EXPORT ──────────────────────────────────────────────────────────────
-function styleSheet(ws, headerStyle){
+function applyExcelStyles(ws, dataRows, daysColIdx){
+  // daysColIdx: 0-based index of the "Days remaining" column
   const range=XLSX.utils.decode_range(ws['!ref']||'A1');
-  for(let c=range.s.c;c<=range.e.c;c++){
-    const hCell=XLSX.utils.encode_cell({r:0,c});
-    if(ws[hCell]) ws[hCell].s=headerStyle;
+  const navy='0A1628'; const white='FFFFFF';
+  const green='1a9e6a'; const greenBg='E6F7F1';
+  const amber='B07D12'; const amberBg='FDF3DC';
+  const red='C0392B'; const redBg='FDECEA';
+
+  for(let R=range.s.r;R<=range.e.r;R++){
+    for(let C=range.s.c;C<=range.e.c;C++){
+      const addr=XLSX.utils.encode_cell({r:R,c:C});
+      if(!ws[addr]) continue;
+      if(!ws[addr].s) ws[addr].s={};
+      if(R===0){
+        // Header row
+        ws[addr].s={font:{bold:true,color:{rgb:white}},fill:{fgColor:{rgb:navy}},alignment:{horizontal:'center'},border:{bottom:{style:'thin',color:{rgb:'C8A84B'}}}};
+      } else {
+        // Data rows — alternating bg
+        const isAlt=R%2===0;
+        ws[addr].s={fill:{fgColor:{rgb:isAlt?'F5F7FA':'FFFFFF'}},alignment:{horizontal:C===0?'left':'right'}};
+        // Color-code days column
+        if(daysColIdx!=null && C===daysColIdx && typeof ws[addr].v==='number'){
+          const d=ws[addr].v;
+          let fg,bg;
+          if(d<90){fg=red;bg=redBg;}
+          else if(d<180){fg=amber;bg=amberBg;}
+          else{fg=green;bg=greenBg;}
+          ws[addr].s={...ws[addr].s,font:{bold:true,color:{rgb:fg}},fill:{fgColor:{rgb:bg}}};
+        }
+      }
+    }
   }
 }
+
 function exportExcel(){
   const wb=XLSX.utils.book_new();
   const month=cap(currentMonth||'Month');
-  const hdr={font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'0A1628'}},alignment:{horizontal:'center'}};
+  const year=new Date().getFullYear();
 
   // ROB summary
   const robRows=[['Vessel','Month','CylOil total (Lt)','Safety stock (Lt)','Usable ROB (Lt)','System oil (Lt)','GE oil (Lt)']];
@@ -928,23 +1027,26 @@ function exportExcel(){
   });
   const ws0=XLSX.utils.aoa_to_sheet(robRows);
   ws0['!cols']=[{wch:22},{wch:12},{wch:18},{wch:16},{wch:16},{wch:16},{wch:14}];
+  applyExcelStyles(ws0, robRows, null);
   XLSX.utils.book_append_sheet(wb,ws0,'ROB Summary');
 
   // Feed rate
   const frRows=[['Vessel','Feed rate (g/kWh)','BN','Engine type','NCR (kW)']];
-  VESSELS.forEach(v=>{ const r=calcRes[v]; frRows.push(['Minerva '+v,r.fr,r.bn,r.eng,r.ncr]); });
+  VESSELS.forEach(v=>{ const r=calcRes[v]; frRows.push(['Minerva '+v,r.fr,r.bn,r.eng.replace('2',''),r.ncr]); });
   const ws1=XLSX.utils.aoa_to_sheet(frRows);
   ws1['!cols']=[{wch:22},{wch:18},{wch:8},{wch:14},{wch:10}];
+  applyExcelStyles(ws1, frRows, null);
   XLSX.utils.book_append_sheet(wb,ws1,'Feed Rate & BN');
 
   // Scenario 1
-  const s1rows=[['Vessel','History (months)','Avg daily consump. (Lt/day)','Usable ROB (Lt)','Days remaining','Months remaining']];
+  const s1rows=[['Vessel','History (months)','Avg daily (Lt/day)','Usable ROB (Lt)','Days remaining','Months remaining']];
   VESSELS.forEach(v=>{
     const r=calcRes[v];
     s1rows.push(['Minerva '+v, r.histCount, r.s1avg!=null?Math.round(r.s1avg):'No Data', r.rob||'', r.s1days!=null?Math.round(r.s1days):'No Data', r.s1days!=null?Math.round(r.s1days/30*10)/10:'No Data']);
   });
   const ws2=XLSX.utils.aoa_to_sheet(s1rows);
-  ws2['!cols']=[{wch:22},{wch:16},{wch:26},{wch:16},{wch:14},{wch:16}];
+  ws2['!cols']=[{wch:22},{wch:16},{wch:20},{wch:16},{wch:14},{wch:16}];
+  applyExcelStyles(ws2, s1rows, 4);
   XLSX.utils.book_append_sheet(wb,ws2,'Scenario 1 - Actual');
 
   // Scenario 2
@@ -955,6 +1057,7 @@ function exportExcel(){
   });
   const ws3=XLSX.utils.aoa_to_sheet(s2rows);
   ws3['!cols']=[{wch:22},{wch:16},{wch:10},{wch:20},{wch:16},{wch:14},{wch:16}];
+  applyExcelStyles(ws3, s2rows, 5);
   XLSX.utils.book_append_sheet(wb,ws3,'Scenario 2 - NCR');
 
   // Scenario 3
@@ -965,6 +1068,7 @@ function exportExcel(){
   });
   const ws4=XLSX.utils.aoa_to_sheet(s3rows);
   ws4['!cols']=[{wch:22},{wch:18},{wch:14},{wch:16},{wch:14},{wch:16}];
+  applyExcelStyles(ws4, s3rows, 4);
   XLSX.utils.book_append_sheet(wb,ws4,'Scenario 3 - Fixed');
 
   // Safety stock
@@ -972,9 +1076,10 @@ function exportExcel(){
   VESSELS.forEach(v=>{ const r=calcRes[v]; ssrows.push(['Minerva '+v, r.ss||'—', r.ss>0?'Emergency drums — excluded from calculations':'No safety stock']); });
   const ws5=XLSX.utils.aoa_to_sheet(ssrows);
   ws5['!cols']=[{wch:22},{wch:18},{wch:44}];
+  applyExcelStyles(ws5, ssrows, null);
   XLSX.utils.book_append_sheet(wb,ws5,'Safety Stock');
 
-  XLSX.writeFile(wb,`Minerva_Gas_LO_ROB_${month}_${new Date().getFullYear()}.xlsx`);
+  XLSX.writeFile(wb,`Minerva_Gas_LO_ROB_${month}_${year}.xlsx`);
 }
 
 // ── MISC ──────────────────────────────────────────────────────────────────────
